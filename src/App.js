@@ -1,11 +1,19 @@
 import "./App.css";
 import axios from 'axios';
 import Plot from "react-plotly.js";
-import {useState} from "react";
+import { useState } from "react";
 
 function App() {
     const [file, setFile] = useState(null);
     const [plotData, setPlotData] = useState({ x: [], y: [] });
+    // Initialize classData with empty arrays to avoid undefined errors
+    const [classData, setClassData] = useState({
+        boundaries: [],
+        frequencies: [],
+        relativeFrequencies: [],
+        empiricalDistributions: []
+    });
+    const [numClasses, setNumClasses] = useState(10);
 
     const onFileChange = event => {
         setFile(event.target.files[0]);
@@ -18,15 +26,28 @@ function App() {
         }
         const formData = new FormData();
         formData.append('file', file);
-        console.log('Uploading file...');
+        formData.append('numClasses', numClasses);
         axios.post('http://localhost:3001/upload', formData)
             .then(response => {
-                const { x, y } = response.data;
                 console.log('Data received:', response.data);
-                setPlotData({ x, y });
+                // Update classData based on the expected response structure
+                setClassData({
+                    boundaries: response.data.boundaries,
+                    frequencies: response.data.frequencies,
+                    relativeFrequencies: response.data.relativeFrequencies,
+                    empiricalDistributions: response.data.empiricalDistributions
+                });
+                // Set the plot data for the histogram
+                setPlotData({ x: response.data.x, y: response.data.y });
             })
-            .catch(err => console.error('Error uploading file:', err));
+            .catch(err => {
+                console.error('Error uploading file:', err);
+                setClassData({ boundaries: [], frequencies: [], relativeFrequencies: [], empiricalDistributions: [] });
+                setPlotData({ x: [], y: [] }); // Clear plot data on error
+            });
     };
+
+
 
     return (
         <div className="App" style={{
@@ -37,14 +58,37 @@ function App() {
             height: "100vh",
         }}>
             <input type="file" onChange={onFileChange} />
-            <button onClick={onFileUpload}>Upload and Plot</button>
+            <input type="number" value={numClasses} onChange={e => setNumClasses(e.target.value)} />
+            <button onClick={onFileUpload}>Upload and Calculate</button>
+            <table style={{ width: "830px", tableLayout: "fixed" }}>
+                <thead>
+                <tr>
+                    <th style={{ width: "80px", borderRight: "1px solid blue"}}>Class No.</th>
+                    <th style={{ width: "200px", borderRight: "1px solid blue" }}>Boundaries</th>
+                    <th style={{ width: "100px", borderRight: "1px solid blue" }}>Frequency</th>
+                    <th style={{ width: "225px", borderRight: "1px solid blue" }}>Relative Frequency</th>
+                    <th style={{ width: "225px"}}>Empirical Distribution</th>
+                </tr>
+                </thead>
+                <tbody>
+                {classData.boundaries.length > 0 ? classData.boundaries.map((boundary, index) => (
+                    <tr key={index}>
+                        <td style={{ borderRight: "1px solid blue" }}>{index + 1}</td>
+                        <td style={{ borderRight: "1px solid blue" }}>{boundary}</td>
+                        <td style={{ borderRight: "1px solid blue" }}>{classData.frequencies[index]}</td>
+                        <td style={{ borderRight: "1px solid blue" }}>{classData.relativeFrequencies[index]}</td>
+                        <td>{classData.empiricalDistributions[index]}</td>
+                    </tr>
+                )) : <tr><td colSpan="5">Loading data or no data available...</td></tr>}
+                </tbody>
+            </table>
             <Plot
                 data={[
                     {
                         x: plotData.x,
                         y: plotData.y,
                         type: 'bar',
-                        marker: {color: 'blue'},
+                        marker: { color: 'blue' },
                     },
                 ]}
                 layout={{
@@ -53,12 +97,13 @@ function App() {
                         title: "Ranges",
                     },
                     yaxis: {
-                        title: "Frequencies",
+                        title: "Relative Frequencies",
                     },
                     autosize: true,
                     responsive: true
                 }}
             />
+
         </div>
     );
 }

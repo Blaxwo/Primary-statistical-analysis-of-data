@@ -6,6 +6,7 @@ const path = require('path');
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
+const basicNumberOfClasses = 10;
 
 app.use(cors());
 app.use(express.json());
@@ -20,33 +21,74 @@ app.post('/upload', upload.single('file'), (req, res) => {
         }
         fs.unlinkSync(filePath);
         const numbers = data.split(/\s+/).map(Number);
-        const histogramData = calculateHistogram(numbers, 6);
-        res.json({ x: histogramData.ranges, y: histogramData.frequencies });
+        const numClasses = parseInt(req.body.numClasses) || basicNumberOfClasses;
+
+        const statistics = calculateStatistics(numbers, numClasses);
+
+        res.json({
+            boundaries: statistics.boundaries,
+            frequencies: statistics.frequencies,
+            relativeFrequencies: statistics.relativeFrequencies,
+            empiricalDistributions: statistics.empiricalDistributions,
+            x: statistics.ranges,
+            y: statistics.histogramFrequencies
+        });
     });
 });
 
-function calculateHistogram(data, numClasses) {
+function calculateStatistics(data, numClasses) {
     const max = Math.max(...data);
     const min = Math.min(...data);
     const classWidth = (max - min) / numClasses;
-    let ranges = [];
+
+    let boundaries = [];
     let frequencies = Array(numClasses).fill(0);
+    let relativeFrequencies = [];
+    let empiricalDistributions = [];
+    let ranges = [];
+    let histogramFrequencies = Array(numClasses).fill(0);
 
     for (let i = 0; i < numClasses; i++) {
-        ranges.push(`${(min + i * classWidth).toFixed(2)} to ${(min + (i + 1) * classWidth).toFixed(2)}`);
+        const lowerBound = (min + i * classWidth);
+        const upperBound = (min + (i + 1) * classWidth);
+        ranges.push(`${lowerBound.toFixed(2)} to ${upperBound.toFixed(2)}`);
+        boundaries.push({ lowerBound, upperBound });
+        console.log('boundaries: ' + boundaries[i]);
     }
 
     data.forEach(value => {
-        const index = Math.min(Math.floor((value - min) / classWidth), numClasses - 1);
-        frequencies[index]++;
+        for (let i = 0; i < boundaries.length; i++) {
+            if (value >= boundaries[i].lowerBound && value < boundaries[i].upperBound) {
+                frequencies[i]++;
+                histogramFrequencies[i]++;
+                break;
+            }
+        }
     });
 
-    console.log(frequencies)
+    const totalFrequency = data.length;
+    let cumulativeFrequency = 0;
 
-    frequencies = frequencies.map(freq => freq / data.length);
+    frequencies.forEach((freq, index) => {
+        let relFreq = freq / totalFrequency;
+        cumulativeFrequency += relFreq;
+        relativeFrequencies.push(relFreq);
+        empiricalDistributions.push(cumulativeFrequency);
+    });
 
-    return { ranges, frequencies };
+    histogramFrequencies = histogramFrequencies.map(freq => freq / data.length);
+    //?
+
+    return {
+        boundaries: boundaries.map(b => `${b.lowerBound.toFixed(2)} to ${b.upperBound.toFixed(2)}`),
+        frequencies,
+        relativeFrequencies,
+        empiricalDistributions,
+        ranges,
+        histogramFrequencies
+    };
 }
+
 
 app.listen(3001, () => {
     console.log('Server started on port 3001');
