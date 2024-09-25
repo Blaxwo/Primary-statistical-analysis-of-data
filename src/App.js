@@ -6,7 +6,6 @@ import { useState } from "react";
 function App() {
     const [file, setFile] = useState(null);
     const [plotData, setPlotData] = useState({ x: [], y: [] });
-    // Initialize classData with empty arrays to avoid undefined errors
     const [classData, setClassData] = useState({
         boundaries: [],
         frequencies: [],
@@ -29,21 +28,18 @@ function App() {
         formData.append('numClasses', numClasses);
         axios.post('http://localhost:3001/upload', formData)
             .then(response => {
-                console.log('Data received:', response.data);
-                // Update classData based on the expected response structure
                 setClassData({
                     boundaries: response.data.boundaries,
                     frequencies: response.data.frequencies,
                     relativeFrequencies: response.data.relativeFrequencies,
                     empiricalDistributions: response.data.empiricalDistributions
                 });
-                // Set the plot data for the histogram
                 setPlotData({ x: response.data.x, y: response.data.y });
             })
             .catch(err => {
                 console.error('Error uploading file:', err);
                 setClassData({ boundaries: [], frequencies: [], relativeFrequencies: [], empiricalDistributions: [] });
-                setPlotData({ x: [], y: [] }); // Clear plot data on error
+                setPlotData({ x: [], y: [] });
             });
     };
 

@@ -31,7 +31,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
             relativeFrequencies: statistics.relativeFrequencies,
             empiricalDistributions: statistics.empiricalDistributions,
             x: statistics.ranges,
-            y: statistics.histogramFrequencies
+            y: statistics.relativeFrequencies
         });
     });
 });
@@ -46,21 +46,18 @@ function calculateStatistics(data, numClasses) {
     let relativeFrequencies = [];
     let empiricalDistributions = [];
     let ranges = [];
-    let histogramFrequencies = Array(numClasses).fill(0);
 
     for (let i = 0; i < numClasses; i++) {
         const lowerBound = (min + i * classWidth);
         const upperBound = (min + (i + 1) * classWidth);
         ranges.push(`${lowerBound.toFixed(2)} to ${upperBound.toFixed(2)}`);
         boundaries.push({ lowerBound, upperBound });
-        console.log('boundaries: ' + boundaries[i]);
     }
 
     data.forEach(value => {
         for (let i = 0; i < boundaries.length; i++) {
             if (value >= boundaries[i].lowerBound && value < boundaries[i].upperBound) {
                 frequencies[i]++;
-                histogramFrequencies[i]++;
                 break;
             }
         }
@@ -76,16 +73,12 @@ function calculateStatistics(data, numClasses) {
         empiricalDistributions.push(cumulativeFrequency);
     });
 
-    histogramFrequencies = histogramFrequencies.map(freq => freq / data.length);
-    //?
-
     return {
         boundaries: boundaries.map(b => `${b.lowerBound.toFixed(2)} to ${b.upperBound.toFixed(2)}`),
         frequencies,
         relativeFrequencies,
         empiricalDistributions,
         ranges,
-        histogramFrequencies
     };
 }
 
