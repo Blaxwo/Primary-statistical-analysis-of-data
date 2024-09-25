@@ -5,12 +5,12 @@ const fs = require('fs');
 const path = require('path');
 
 const app = express();
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({dest: 'uploads/'});
 const basicNumberOfClasses = 10;
 
 app.use(cors());
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({extended: true}));
 
 app.post('/upload', upload.single('file'), (req, res) => {
     const filePath = path.join(__dirname, 'uploads', req.file.filename);
@@ -51,11 +51,17 @@ function calculateStatistics(data, numClasses) {
         const lowerBound = (min + i * classWidth);
         const upperBound = (min + (i + 1) * classWidth);
         ranges.push(`${lowerBound.toFixed(2)} to ${upperBound.toFixed(2)}`);
-        boundaries.push({ lowerBound, upperBound });
+        boundaries.push({lowerBound, upperBound});
     }
 
     data.forEach(value => {
         for (let i = 0; i < boundaries.length; i++) {
+            if (i === boundaries.length - 1) {
+                if (value >= boundaries[i].lowerBound && value <= boundaries[i].upperBound) {
+                    frequencies[i]++;
+                    break;
+                }
+            }
             if (value >= boundaries[i].lowerBound && value < boundaries[i].upperBound) {
                 frequencies[i]++;
                 break;
