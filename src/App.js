@@ -5,54 +5,62 @@ import {useState} from "react";
 
 function App() {
     const [file, setFile] = useState(null);
-    const [image, setImage] = useState('');
+    const [plotData, setPlotData] = useState({ x: [], y: [] });
 
     const onFileChange = event => {
         setFile(event.target.files[0]);
     };
 
     const onFileUpload = () => {
+        if (!file) {
+            console.log("No file selected!");
+            return;
+        }
         const formData = new FormData();
         formData.append('file', file);
-
-        axios.post('http://localhost:3000/upload', formData, { responseType: 'blob' })
+        console.log('Uploading file...');
+        axios.post('http://localhost:3001/upload', formData)
             .then(response => {
-                const url = window.URL.createObjectURL(new Blob([response.data]));
-                setImage(url);
+                const { x, y } = response.data;
+                console.log('Data received:', response.data);
+                setPlotData({ x, y });
             })
-            .catch(err => console.error(err));
+            .catch(err => console.error('Error uploading file:', err));
     };
-  return (
-      <div
-          className="App"
-          style={{
+
+    return (
+        <div className="App" style={{
             display: "flex",
-            justifyContent: "center",
+            flexDirection: "column",
             alignItems: "center",
+            justifyContent: "center",
             height: "100vh",
-          }}
-      >
-        <Plot
-            data={[
-              {
-                x: [1, 2, 3, 4, 6, 8, 10, 12, 14, 16, 18],
-                y: [32, 37, 40.5, 43, 49, 54, 59, 63.5, 69.5, 73, 74],
-                mode: "markers",
-                type: "scatter",
-              },
-            ]}
-            layout={{
-              title: "Growth Rate in Boys",
-              xaxis: {
-                title: "Age (years)",
-              },
-              yaxis: {
-                title: "Height (inches)",
-              },
-            }}
-        />
-      </div>
-  );
+        }}>
+            <input type="file" onChange={onFileChange} />
+            <button onClick={onFileUpload}>Upload and Plot</button>
+            <Plot
+                data={[
+                    {
+                        x: plotData.x,
+                        y: plotData.y,
+                        type: 'bar',
+                        marker: {color: 'blue'},
+                    },
+                ]}
+                layout={{
+                    title: "Histogram of Uploaded Data",
+                    xaxis: {
+                        title: "Ranges",
+                    },
+                    yaxis: {
+                        title: "Frequencies",
+                    },
+                    autosize: true,
+                    responsive: true
+                }}
+            />
+        </div>
+    );
 }
 
 export default App;

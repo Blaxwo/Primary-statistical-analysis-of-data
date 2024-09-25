@@ -1,13 +1,15 @@
 const express = require('express');
 const multer = require('multer');
+const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
-const { plot } = require('nodeplotlib');
 
 const app = express();
 const upload = multer({ dest: 'uploads/' });
 
-app.use(express.static(path.join(__dirname, '..', 'public', 'server')));
+app.use(cors());
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 app.post('/upload', upload.single('file'), (req, res) => {
     const filePath = path.join(__dirname, 'uploads', req.file.filename);
@@ -16,13 +18,10 @@ app.post('/upload', upload.single('file'), (req, res) => {
             console.error(err);
             return res.status(500).send('Error processing file');
         }
-
+        fs.unlinkSync(filePath);
         const numbers = data.split(/\s+/).map(Number);
-        const histogramData = calculateHistogram(numbers, 5);
-        const plotData = [{x: histogramData.ranges, y: histogramData.frequencies, type: 'bar'}];
-
-        plot(plotData);
-        res.sendFile(path.join(__dirname, '..', 'plot.html'));
+        const histogramData = calculateHistogram(numbers, 6);
+        res.json({ x: histogramData.ranges, y: histogramData.frequencies });
     });
 });
 
@@ -34,7 +33,7 @@ function calculateHistogram(data, numClasses) {
     let frequencies = Array(numClasses).fill(0);
 
     for (let i = 0; i < numClasses; i++) {
-        ranges.push(`${min + i * classWidth} - ${min + (i + 1) * classWidth}`);
+        ranges.push(`${(min + i * classWidth).toFixed(2)} to ${(min + (i + 1) * classWidth).toFixed(2)}`);
     }
 
     data.forEach(value => {
@@ -42,9 +41,13 @@ function calculateHistogram(data, numClasses) {
         frequencies[index]++;
     });
 
+    console.log(frequencies)
+
+    frequencies = frequencies.map(freq => freq / data.length);
+
     return { ranges, frequencies };
 }
 
-app.listen(3000, () => {
-    console.log('Server started on port 3000');
+app.listen(3001, () => {
+    console.log('Server started on port 3001');
 });
