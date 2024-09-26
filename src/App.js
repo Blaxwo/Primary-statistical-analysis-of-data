@@ -12,7 +12,10 @@ function App() {
         relativeFrequencies: [],
         empiricalDistributions: []
     });
-    const [numClasses, setNumClasses] = useState(10);
+    const [kdeData, setKdeData] = useState({ x: [], y: [] });
+    const [ecdfData, setEcdfData] = useState({ x: [], y: [] });
+    const [numClasses, setNumClasses] = useState(0);
+    const [bandwidth, setBandwidth] = useState(null);
 
     const onFileChange = event => {
         setFile(event.target.files[0]);
@@ -26,6 +29,8 @@ function App() {
         const formData = new FormData();
         formData.append('file', file);
         formData.append('numClasses', numClasses);
+        formData.append('bandwidth', bandwidth);
+
         axios.post('http://localhost:3001/upload', formData)
             .then(response => {
                 setClassData({
@@ -35,15 +40,17 @@ function App() {
                     empiricalDistributions: response.data.empiricalDistributions
                 });
                 setPlotData({ x: response.data.x, y: response.data.y });
+                setKdeData({ x: response.data.kdeX, y: response.data.kdeY });
+                setEcdfData({ x: response.data.ecdfX, y: response.data.ecdfY });
             })
             .catch(err => {
                 console.error('Error uploading file:', err);
                 setClassData({ boundaries: [], frequencies: [], relativeFrequencies: [], empiricalDistributions: [] });
                 setPlotData({ x: [], y: [] });
+                setKdeData({ x: [], y: [] });
+                setEcdfData({ x: [], y: [] });
             });
     };
-
-
 
     return (
         <div className="App" style={{
@@ -55,15 +62,17 @@ function App() {
         }}>
             <input type="file" onChange={onFileChange} />
             <input type="number" value={numClasses} onChange={e => setNumClasses(e.target.value)} />
+            <input type="number" placeholder="Bandwidth" value={bandwidth} onChange={e => setBandwidth(e.target.value)} />
             <button onClick={onFileUpload}>Upload and Calculate</button>
-            <table style={{ width: "830px", tableLayout: "fixed" }}>
+
+            <table style={{ width: "830px", tableLayout: "fixed", maxHeight: "500px", overflowY: "auto", display: "block" }}>
                 <thead>
                 <tr>
-                    <th style={{ width: "80px", borderRight: "1px solid blue"}}>Class No.</th>
+                    <th style={{ width: "80px", borderRight: "1px solid blue" }}>Class No.</th>
                     <th style={{ width: "200px", borderRight: "1px solid blue" }}>Boundaries</th>
                     <th style={{ width: "100px", borderRight: "1px solid blue" }}>Frequency</th>
                     <th style={{ width: "225px", borderRight: "1px solid blue" }}>Relative Frequency</th>
-                    <th style={{ width: "225px"}}>Empirical Distribution</th>
+                    <th style={{ width: "225px" }}>Empirical Distribution</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -78,6 +87,7 @@ function App() {
                 )) : <tr><td colSpan="5">Loading data or no data available...</td></tr>}
                 </tbody>
             </table>
+
             <Plot
                 data={[
                     {
@@ -86,20 +96,42 @@ function App() {
                         type: 'bar',
                         marker: { color: 'blue' },
                     },
+                    {
+                        x: kdeData.x,
+                        y: kdeData.y,
+                        type: 'scatter',
+                        mode: 'lines',
+                        line: { color: 'red' },
+                        name: 'KDE'
+                    }
                 ]}
                 layout={{
-                    title: "Histogram of Uploaded Data",
-                    xaxis: {
-                        title: "Ranges",
-                    },
-                    yaxis: {
-                        title: "Relative Frequencies",
-                    },
+                    title: "Histogram and KDE",
+                    xaxis: { title: "Boundaries" },
+                    yaxis: { title: "Relative Frequencies" },
                     autosize: true,
                     responsive: true
                 }}
             />
 
+            {/*<Plot*/}
+            {/*    data={[*/}
+            {/*        {*/}
+            {/*            x: ecdfData.x,*/}
+            {/*            y: ecdfData.y,*/}
+            {/*            type: 'scatter',*/}
+            {/*            mode: 'lines',*/}
+            {/*            line: { color: 'green' },*/}
+            {/*        }*/}
+            {/*    ]}*/}
+            {/*    layout={{*/}
+            {/*        title: "Empirical Distribution Function (ECDF)",*/}
+            {/*        xaxis: { title: "Data" },*/}
+            {/*        yaxis: { title: "Cumulative Probability" },*/}
+            {/*        autosize: true,*/}
+            {/*        responsive: true*/}
+            {/*    }}*/}
+            {/*/>*/}
         </div>
     );
 }
