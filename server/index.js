@@ -7,7 +7,7 @@ const math = require('mathjs');
 
 const app = express();
 const upload = multer({dest: 'uploads/'});
-const numOfPoints = 25;
+const numOfPoints = 500;
 let ranges = [];
 
 app.use(cors());
@@ -28,7 +28,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
         const bandwidth = parseFloat(req.body.bandwidth) || calculateBandwidth(numbers);
 
         const statistics = calculateStatistics(numbers, numClasses);
-        const kdeData = calculateKDE(numbers, bandwidth, ranges, numClasses);
+        const kdeData = calculateKDE(numbers, bandwidth, numClasses);
         const ecdfData = calculateECDF(numbers);
 
         res.json({
@@ -38,7 +38,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
             empiricalDistributions: statistics.empiricalDistributions,
             x: statistics.ranges,
             y: statistics.relativeFrequencies,
-            kdeX: kdeData.x,
+            kdeX: kdeData.x_values,
             kdeY: kdeData.y,
             ecdfX: ecdfData.x,
             ecdfY: ecdfData.y
@@ -46,13 +46,14 @@ app.post('/upload', upload.single('file'), (req, res) => {
     });
 });
 
-function calculateKDE(data, bandwidth, x, numClasses) {
+function calculateKDE(data, bandwidth, numClasses) {
     const n = data.length;
-    console.log('x: ', x);
     const max = Math.max(...data);
     const min = Math.min(...data);
     const classWidth = (max - min) / numClasses;
-    const y = x.map(xi => {
+    const x_values = Array.from({ length: numOfPoints }, (_, i) => min + i * (max - min) / numOfPoints - 1);
+    console.log('x_values: ', x_values);
+    const y = x_values.map(xi => {
         const kernelSum = data.reduce((sum, i) => {
             return sum + (Math.exp(-(Math.pow((xi - i) / bandwidth, 2)) / 2) / Math.sqrt(2 * Math.PI));
         }, 0);
@@ -61,7 +62,7 @@ function calculateKDE(data, bandwidth, x, numClasses) {
 
     console.log('y: ', y)
 
-    return {x, y};
+    return {x_values, y};
 }
 
 //    const kde = data.reduce((a, b) => a + Math.exp((-Math.pow(((x-b)/bandwidth), 2)/2))/(Math.sqrt(2 * Math.PI)), 0) / (n * bandwidth)
