@@ -3,6 +3,7 @@ const multer = require('multer');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const math = require('mathjs');
 
 const app = express();
 const upload = multer({dest: 'uploads/'});
@@ -27,7 +28,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
         const bandwidth = parseFloat(req.body.bandwidth) || calculateBandwidth(numbers);
 
         const statistics = calculateStatistics(numbers, numClasses);
-        const kdeData = calculateKDE(numbers, bandwidth, ranges);
+        const kdeData = calculateKDE(numbers, bandwidth, ranges, numClasses);
         const ecdfData = calculateECDF(numbers);
 
         res.json({
@@ -45,15 +46,20 @@ app.post('/upload', upload.single('file'), (req, res) => {
     });
 });
 
-function calculateKDE(data, bandwidth, x) {
+function calculateKDE(data, bandwidth, x, numClasses) {
     const n = data.length;
-    console.log(x);
+    console.log('x: ', x);
+    const max = Math.max(...data);
+    const min = Math.min(...data);
+    const classWidth = (max - min) / numClasses;
     const y = x.map(xi => {
         const kernelSum = data.reduce((sum, i) => {
-            return sum + (Math.exp(-Math.pow((xi - i) / bandwidth, 2) / 2) / Math.sqrt(2 * Math.PI));
+            return sum + (Math.exp(-(Math.pow((xi - i) / bandwidth, 2)) / 2) / Math.sqrt(2 * Math.PI));
         }, 0);
-        return kernelSum / (n * bandwidth);
+        return (kernelSum * classWidth / (n * bandwidth));
     });
+
+    console.log('y: ', y)
 
     return {x, y};
 }
@@ -76,7 +82,8 @@ function calculateBandwidth(data) {
     const n = data.length;
     const mean = data.reduce((a, b) => a + b, 0) / n;
     const stdDev = Math.sqrt(data.reduce((sum, x) => sum + Math.pow(x - mean, 2), 0) / n);
-    return stdDev * Math.pow(n, -0.2);
+    console.log('bandwidth:', math.std(data) * Math.pow(n, -0.2))
+    return  stdDev * Math.pow(n, -0.2);
 }
 
 function calculateStatistics(data, numClasses) {
