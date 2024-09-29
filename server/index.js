@@ -29,7 +29,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
 
         const statistics = calculateStatistics(numbers, numClasses);
         const kdeData = calculateKDE(numbers, bandwidth, numClasses);
-        const ecdfData = calculateECDF(numbers);
+        const ecdfData = calculateECDF(statistics.frequenciesArray);
 
         res.json({
             boundaries: statistics.boundaries,
@@ -51,8 +51,8 @@ function calculateKDE(data, bandwidth, numClasses) {
     const max = Math.max(...data);
     const min = Math.min(...data);
     const classWidth = (max - min) / numClasses;
-    const x_values = Array.from({ length: numOfPoints }, (_, i) => min + i * (max - min) / numOfPoints - 1);
-    console.log('x_values: ', x_values);
+    const widthBetweenPoints = (max - min) / numOfPoints;
+    const x_values = Array.from({ length: numOfPoints }, (_, i) => min + i * widthBetweenPoints);
     const y = x_values.map(xi => {
         const kernelSum = data.reduce((sum, i) => {
             return sum + (Math.exp(-(Math.pow((xi - i) / bandwidth, 2)) / 2) / Math.sqrt(2 * Math.PI));
@@ -60,17 +60,16 @@ function calculateKDE(data, bandwidth, numClasses) {
         return (kernelSum * classWidth / (n * bandwidth));
     });
 
-    console.log('y: ', y)
 
     return {x_values, y};
 }
 
 //    const kde = data.reduce((a, b) => a + Math.exp((-Math.pow(((x-b)/bandwidth), 2)/2))/(Math.sqrt(2 * Math.PI)), 0) / (n * bandwidth)
-function calculateECDF(data) {
-    const sortedData = [...data].sort((a, b) => a - b);
-    const n = data.length;
-    const x = sortedData;
-    const y = sortedData.map((_, i) => (i + 1) / n);
+function calculateECDF(frequenciesArray) {
+    const x = frequenciesArray.map((el) => el.value);
+    const y = frequenciesArray.map((el) => el.empiricalDistributions)
+    console.log('x for ecdf: ' + x)
+    console.log('y for ecdf: ' + y)
     return {x, y};
 }
 
@@ -91,11 +90,37 @@ function calculateStatistics(data, numClasses) {
     const max = Math.max(...data);
     const min = Math.min(...data);
     const classWidth = (max - min) / numClasses;
+    const totalElements = data.length;
+    const sortedData = [...data].sort((a, b) => a - b);
 
     let boundaries = [];
     let frequencies = Array(numClasses).fill(0);
+    let frequenciesForSingleVal = {};
     let relativeFrequencies = [];
     let empiricalDistributions = [];
+    let cumulativeRelativeFrequency = 0;
+
+    sortedData.forEach(value => {
+        if (frequenciesForSingleVal[value]) {
+            frequenciesForSingleVal[value]++;
+        } else {
+            frequenciesForSingleVal[value] = 1;
+        }
+    });
+
+    const frequenciesArray = Object.entries(frequenciesForSingleVal).map(([value, frequency]) => {
+        const relativeFrequency = frequency / totalElements;
+        cumulativeRelativeFrequency += relativeFrequency;
+
+        return {
+            value: Number(value),
+            frequency,
+            relativeFrequency,
+            empiricalDistributions: cumulativeRelativeFrequency
+        };
+    });
+
+    console.log(frequenciesArray);
 
     for (let i = 0; i < numClasses; i++) {
         const lowerBound = (min + i * classWidth);
@@ -122,11 +147,10 @@ function calculateStatistics(data, numClasses) {
         }
     });
 
-    const totalFrequency = data.length;
     let cumulativeFrequency = 0;
 
     frequencies.forEach((freq, index) => {
-        let relFreq = freq / totalFrequency;
+        let relFreq = freq / totalElements;
         cumulativeFrequency += relFreq;
         relativeFrequencies.push(relFreq);
         empiricalDistributions.push(cumulativeFrequency);
@@ -138,6 +162,7 @@ function calculateStatistics(data, numClasses) {
         relativeFrequencies,
         empiricalDistributions,
         ranges,
+        frequenciesArray
     };
 }
 
