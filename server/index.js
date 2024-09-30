@@ -75,7 +75,7 @@ function calculateECDF(frequenciesArray) {
 
 function calculateNumClasses(data) {
     const n = data.length;
-    return Math.round(1 + 3.32 * Math.log(n));
+    return Math.round(1 + 1.44 * Math.log(n));
 }
 
 function calculateBandwidth(data) {
@@ -92,6 +92,7 @@ function calculateStatistics(data, numClasses) {
     const classWidth = (max - min) / numClasses;
     const totalElements = data.length;
     const sortedData = [...data].sort((a, b) => a - b);
+    const epsilon = 1e-10;
 
     let boundaries = [];
     let frequencies = Array(numClasses).fill(0);
@@ -135,7 +136,7 @@ function calculateStatistics(data, numClasses) {
     data.forEach(value => {
         for (let i = 0; i < boundaries.length; i++) {
             if (i === boundaries.length - 1) {
-                if (value >= boundaries[i].lowerBound && value <= boundaries[i].upperBound) {
+                if (value >= boundaries[i].lowerBound && (value < boundaries[i].upperBound || Math.abs(value - boundaries[i].upperBound) <= epsilon)) {
                     frequencies[i]++;
                     break;
                 }

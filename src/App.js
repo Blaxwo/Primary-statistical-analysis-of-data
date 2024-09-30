@@ -95,6 +95,7 @@ function App() {
                             y: plotData.y,
                             type: 'bar',
                             marker: { color: 'blue' },
+                            offset: 0,
                         },
                         {
                             x: kdeData.x,
@@ -110,7 +111,8 @@ function App() {
                         xaxis: { title: "Boundaries" },
                         yaxis: { title: "Relative Frequencies" },
                         autosize: true,
-                        responsive: true
+                        responsive: true,
+                        bargap: 0,
                     }}
                 />
             </div>
@@ -127,7 +129,7 @@ function App() {
                                 y: ecdfData.y,
                                 type: 'scatter',
                                 mode: 'lines',
-                                line: { color: 'green' },
+                                line: { color: 'green', shape: 'hv' },
                             }
                         ]}
                         layout={{
