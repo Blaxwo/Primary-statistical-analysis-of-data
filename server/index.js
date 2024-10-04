@@ -28,6 +28,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
         const bandwidth = parseFloat(req.body.bandwidth) || calculateBandwidth(numbers);
 
         const statistics = calculateStatistics(numbers, numClasses);
+        const estimatedStatistic = estimateStatistics(numbers);
         const kdeData = calculateKDE(numbers, bandwidth, numClasses);
         const ecdfData = calculateECDF(statistics.frequenciesArray);
 
@@ -51,8 +52,9 @@ function calculateKDE(data, bandwidth, numClasses) {
     const max = Math.max(...data);
     const min = Math.min(...data);
     const classWidth = (max - min) / numClasses;
+    console.log('numClasses: ' + numClasses)
     const widthBetweenPoints = (max - min) / numOfPoints;
-    const x_values = Array.from({ length: numOfPoints }, (_, i) => min + i * widthBetweenPoints);
+    const x_values = Array.from({length: numOfPoints}, (_, i) => min + i * widthBetweenPoints);
     const y = x_values.map(xi => {
         const kernelSum = data.reduce((sum, i) => {
             return sum + (Math.exp(-(Math.pow((xi - i) / bandwidth, 2)) / 2) / Math.sqrt(2 * Math.PI));
@@ -68,8 +70,6 @@ function calculateKDE(data, bandwidth, numClasses) {
 function calculateECDF(frequenciesArray) {
     const x = frequenciesArray.map((el) => el.value);
     const y = frequenciesArray.map((el) => el.empiricalDistributions)
-    console.log('x for ecdf: ' + x)
-    console.log('y for ecdf: ' + y)
     return {x, y};
 }
 
@@ -83,7 +83,68 @@ function calculateBandwidth(data) {
     const mean = data.reduce((a, b) => a + b, 0) / n;
     const stdDev = Math.sqrt(data.reduce((sum, x) => sum + Math.pow(x - mean, 2), 0) / n);
     console.log('bandwidth:', math.std(data) * Math.pow(n, -0.2))
-    return  stdDev * Math.pow(n, -0.2);
+    return stdDev * Math.pow(n, -0.2);
+}
+
+function calcMedian(data, n) {
+    if (n % 2 === 0) {
+        return 0.5 * (data[n / 2] + data[1 + n / 2]);
+    } else {
+        return data[(n + 1) / 2];
+    }
+}
+
+function calcVariance0(data, mean, n) {
+    return data.reduce((sum, x) => sum + Math.pow((x - mean), 2), 0) / n;
+}
+
+function calcVariance1(data, mean, n) {
+    return data.reduce((sum, x) => sum + Math.pow((x - mean), 2), 0) / (n - 1);
+}
+
+function calcSkewness(data, mean, n, stdDev0) {
+    return (Math.sqrt(n * (n - 1))/(n - 2)) * (data.reduce((sum, x) => sum + (Math.pow((x - mean), 3)), 0) / (Math.pow(stdDev0, 3) * n));
+}
+
+function calcKurtosis(data, mean, n, stdDev0) {
+    return (((Math.pow(n, 2) - 1) / ((n - 2) * (n - 3))) * (((6 / (n + 1)) + ((data.reduce((sum, x) => sum + Math.pow((x - mean),4), 0) / (n * Math.pow(stdDev0, 4))) - 3))));
+}
+
+function estimateStatistics(data) {
+    const n = data.length;
+    const sortedData = data.sort((a, b) => a - b);
+
+    const mean = data.reduce((a, b) => a + b, 0) / n;
+    const median = calcMedian(sortedData, n);
+    const variance0 = calcVariance0(data, mean, n);
+    const variance1 = calcVariance1(data, mean, n);
+    const stdDev0 = Math.sqrt(variance0);
+    const stdDev1 = Math.sqrt(variance1);
+    console.log('stdDev0: ' + stdDev0)
+    const skewness = calcSkewness(data, mean, n, stdDev0);
+    const kurtosis = calcKurtosis(data, mean, n, stdDev0);
+    const semMean = stdDev1 / Math.sqrt(n);
+    const semStd0 = stdDev0 /  Math.sqrt(2 * (n - 1));
+
+
+    console.log('mean: ', mean, 'median: ',
+        median, 'stdDev1: ',
+        stdDev1, 'skewness: ',
+        skewness, 'kurtosis: ',
+        kurtosis, 'semMean: ',
+        semMean, 'semStd0: ',
+        semStd0,)
+    return {
+        mean,
+        median,
+        stdDev1,
+        skewness,
+        kurtosis,
+        min: Math.min(...data),
+        max: Math.max(...data),
+        semMean,
+        semStd0
+    }
 }
 
 function calculateStatistics(data, numClasses) {
@@ -121,7 +182,6 @@ function calculateStatistics(data, numClasses) {
         };
     });
 
-    console.log(frequenciesArray);
 
     for (let i = 0; i < numClasses; i++) {
         const lowerBound = (min + i * classWidth);
