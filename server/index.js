@@ -4,10 +4,12 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const math = require('mathjs');
+const jStat = require('jstat');
 
 const app = express();
 const upload = multer({dest: 'uploads/'});
 const numOfPoints = 500;
+const confidenceLevel = 0.95;
 let ranges = [];
 
 app.use(cors());
@@ -103,11 +105,11 @@ function calcVariance1(data, mean, n) {
 }
 
 function calcSkewness(data, mean, n, stdDev0) {
-    return (Math.sqrt(n * (n - 1))/(n - 2)) * (data.reduce((sum, x) => sum + (Math.pow((x - mean), 3)), 0) / (Math.pow(stdDev0, 3) * n));
+    return (Math.sqrt(n * (n - 1)) / (n - 2)) * (data.reduce((sum, x) => sum + (Math.pow((x - mean), 3)), 0) / (Math.pow(stdDev0, 3) * n));
 }
 
 function calcKurtosis(data, mean, n, stdDev0) {
-    return (((Math.pow(n, 2) - 1) / ((n - 2) * (n - 3))) * (((6 / (n + 1)) + ((data.reduce((sum, x) => sum + Math.pow((x - mean),4), 0) / (n * Math.pow(stdDev0, 4))) - 3))));
+    return (((Math.pow(n, 2) - 1) / ((n - 2) * (n - 3))) * (((6 / (n + 1)) + ((data.reduce((sum, x) => sum + Math.pow((x - mean), 4), 0) / (n * Math.pow(stdDev0, 4))) - 3))));
 }
 
 function estimateStatistics(data) {
@@ -123,17 +125,34 @@ function estimateStatistics(data) {
     console.log('stdDev0: ' + stdDev0)
     const skewness = calcSkewness(data, mean, n, stdDev0);
     const kurtosis = calcKurtosis(data, mean, n, stdDev0);
-    const semMean = stdDev1 / Math.sqrt(n);
-    const semStd0 = stdDev0 /  Math.sqrt(2 * (n - 1));
 
+    const semMean = stdDev1 / Math.sqrt(n);
+    const semStd1 = stdDev1 / Math.sqrt(2 * n);
+    const semSkewness = Math.sqrt((6 * n * (n - 1)) / ((n - 2) * (n + 1) * (n + 3)));
+    const semKurtosis = Math.sqrt((24 * n * Math.pow((n - 1), 2)) / ((n - 2) * (n - 3) * (n + 3) * (n + 5)));
+
+    const alfa = 1 - confidenceLevel;
+    const zValue = jStat.normal.inv(1 - alfa / 2, 0, 1);
+    console.log(zValue)
+    const meanCI = {x: (mean - (zValue * semMean)), y: (mean + (zValue * semMean))};
+    const medianCI = {x: sortedData[( Math.ceil((n / 2) - (zValue * (Math.sqrt(n) / 2))) - 1)], y: sortedData[( Math.ceil((n / 2) + 1 + (zValue * (Math.sqrt(n) / 2))) - 1)]};
+    const stdDevCI = {x: (stdDev1 - (zValue * semStd1)), y: (stdDev1 + (zValue * semStd1))};
+    const skewnessCI = {x: (skewness - (zValue * semSkewness)), y: (skewness + (zValue * semSkewness))};
+    const kurtosisCI = {x: (kurtosis - (zValue * semKurtosis)), y: (kurtosis + (zValue * semKurtosis))};
 
     console.log('mean: ', mean, 'median: ',
         median, 'stdDev1: ',
         stdDev1, 'skewness: ',
         skewness, 'kurtosis: ',
         kurtosis, 'semMean: ',
-        semMean, 'semStd0: ',
-        semStd0,)
+        semMean, 'semStd1: ',
+        semStd1, 'semSkewness: ',
+        semSkewness, 'meanCI: ',
+        meanCI, 'medianCI: ',
+        medianCI, 'stdDevCI: ',
+        stdDevCI, 'skewnessCI: ',
+        skewnessCI, 'kurtosisCI: ',
+        kurtosisCI)
     return {
         mean,
         median,
@@ -143,7 +162,14 @@ function estimateStatistics(data) {
         min: Math.min(...data),
         max: Math.max(...data),
         semMean,
-        semStd0
+        semStd1,
+        semSkewness,
+        semKurtosis,
+        meanCI,
+        medianCI,
+        stdDevCI,
+        skewnessCI,
+        kurtosisCI
     }
 }
 
