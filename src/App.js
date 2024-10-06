@@ -12,11 +12,16 @@ function App() {
         relativeFrequencies: [],
         empiricalDistributions: []
     });
+    const [numbers, setNumbers] = useState([])
     const [kdeData, setKdeData] = useState({ x: [], y: [] });
     const [ecdfData, setEcdfData] = useState({ x: [], y: [] });
+    const [anomaliesData, setAnomaliesfData] = useState({ x: [], y: [] });
     const [numClasses, setNumClasses] = useState(0);
     const [bandwidth, setBandwidth] = useState(null);
     const [showEcdf, setShowEcdf] = useState(false);
+    const [showAnomalies, setShowAnomalies] = useState(false);
+    const [boundaries, setBoundaries] = useState({ lowerBound: 0, upperBound: 0 });
+    const [anomalies, setAnomalies] = useState({anomalies: []})
 
     const onFileChange = event => {
         setFile(event.target.files[0]);
@@ -34,6 +39,7 @@ function App() {
 
         axios.post('http://localhost:3001/upload', formData)
             .then(response => {
+                setNumbers(response.data.numbers);
                 setClassData({
                     boundaries: response.data.boundaries,
                     frequencies: response.data.frequencies,
@@ -43,13 +49,50 @@ function App() {
                 setPlotData({ x: response.data.x, y: response.data.y });
                 setKdeData({ x: response.data.kdeX, y: response.data.kdeY });
                 setEcdfData({ x: response.data.ecdfX, y: response.data.ecdfY });
+                setAnomaliesfData({ x: response.data.anomaliesX, y: response.data.anomaliesY });
+                setAnomalies({anomalies: response.data.anomalies})
+                setBoundaries({ lowerBound: response.data.boundariesAnomalies.lowerBound, upperBound: response.data.boundariesAnomalies.upperBound });
             })
             .catch(err => {
                 console.error('Error uploading file:', err);
+                setNumbers([]);
                 setClassData({ boundaries: [], frequencies: [], relativeFrequencies: [], empiricalDistributions: [] });
                 setPlotData({ x: [], y: [] });
                 setKdeData({ x: [], y: [] });
                 setEcdfData({ x: [], y: [] });
+                setAnomaliesfData({ x: [], y: [] });
+                setBoundaries({upperBound: 0, lowerBound: 0});
+                setAnomalies({anomalies: []});
+            });
+    };
+
+    const removeAnomalies = () => {
+        const updatedNumbers = numbers.filter(num => !anomalies.anomalies.includes(num));
+
+        setNumbers(updatedNumbers);
+
+        axios.post('http://localhost:3001/update-numbers', { numbers: updatedNumbers })
+            .then(response => {
+                setNumbers(response.data.numbers);
+                setClassData({
+                    boundaries: response.data.boundaries,
+                    frequencies: response.data.frequencies,
+                    relativeFrequencies: response.data.relativeFrequencies,
+                    empiricalDistributions: response.data.empiricalDistributions
+                });
+                setPlotData({ x: response.data.x, y: response.data.y });
+                setKdeData({ x: response.data.kdeX, y: response.data.kdeY });
+                setEcdfData({ x: response.data.ecdfX, y: response.data.ecdfY });
+                setAnomaliesfData({ x: response.data.anomaliesX, y: response.data.anomaliesY });
+            })
+            .catch(err => {
+                console.error('Error uploading file:', err);
+                setNumbers([]);
+                setClassData({ boundaries: [], frequencies: [], relativeFrequencies: [], empiricalDistributions: [] });
+                setPlotData({ x: [], y: [] });
+                setKdeData({ x: [], y: [] });
+                setEcdfData({ x: [], y: [] });
+                setAnomaliesfData({ x: [], y: [] });
             });
     };
 
@@ -58,7 +101,9 @@ function App() {
             <div style={{ width: "50%", padding: "20px" }}>
                 <div style={{ margin: "30px 0 30px 0"}}>
                     <input type="file" onChange={onFileChange} />
+                    <div>Num of classes:</div>
                     <input type="number" value={numClasses} onChange={e => setNumClasses(e.target.value)} />
+                    <div>Bandwidth:</div>
                     <input type="number" placeholder="Bandwidth" value={bandwidth} onChange={e => setBandwidth(e.target.value)} />
                     <button onClick={onFileUpload}>Upload and Calculate</button>
                 </div>
@@ -121,6 +166,10 @@ function App() {
                 <button onClick={() => setShowEcdf(!showEcdf)}>
                     {showEcdf ? "Hide ECDF" : "Show ECDF"}
                 </button>
+                <button onClick={() => setShowAnomalies(!showAnomalies)}>
+                    {showAnomalies ? "Hide Anomalies" : "Show Anomalies"}
+                </button>
+                <button onClick={removeAnomalies}>Remove Anomalous Values</button>
                 {showEcdf && (
                     <Plot
                         data={[
@@ -138,6 +187,52 @@ function App() {
                             yaxis: { title: "FN(x)" },
                             autosize: true,
                             responsive: true
+                        }}
+                    />
+                )}
+                {showAnomalies && (
+                    <Plot
+                        data={[
+                            {
+                                x: anomaliesData.x.filter((_, i) => anomaliesData.y[i] >= boundaries.lowerBound && anomaliesData.y[i] <= boundaries.upperBound),
+                                y: anomaliesData.y.filter(y => y >= boundaries.lowerBound && y <= boundaries.upperBound),
+                                type: 'scatter',
+                                mode: 'markers',
+                                marker: { color: 'blue' },
+                                name: 'Normal Data'
+                            },
+                            {
+                                x: anomaliesData.x.filter((_, i) => anomaliesData.y[i] < boundaries.lowerBound || anomaliesData.y[i] > boundaries.upperBound),
+                                y: anomaliesData.y.filter(y => y < boundaries.lowerBound || y > boundaries.upperBound),
+                                type: 'scatter',
+                                mode: 'markers',
+                                marker: { color: 'red' },
+                                name: 'Anomalies'
+                            },
+                            {
+                                x: [Math.min(...anomaliesData.x), Math.max(...anomaliesData.x)],
+                                y: [boundaries.upperBound, boundaries.upperBound],
+                                type: 'scatter',
+                                mode: 'lines',
+                                line: { color: 'red' },
+                                name: 'Upper Bound'
+                            },
+                            {
+                                x: [Math.min(...anomaliesData.x), Math.max(...anomaliesData.x)],
+                                y: [boundaries.lowerBound, boundaries.lowerBound],
+                                type: 'scatter',
+                                mode: 'lines',
+                                line: { color: 'red' },
+                                name: 'Lower Bound'
+                            }
+                        ]}
+                        layout={{
+                            title: "Data with Anomalies",
+                            xaxis: { title: "Index" },
+                            yaxis: { title: "Values" },
+                            autosize: true,
+                            responsive: true,
+                            showlegend: true
                         }}
                     />
                 )}

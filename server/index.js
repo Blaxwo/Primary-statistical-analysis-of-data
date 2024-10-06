@@ -5,12 +5,14 @@ const fs = require('fs');
 const path = require('path');
 const math = require('mathjs');
 const jStat = require('jstat');
+const ss = require('simple-statistics');
 
 const app = express();
 const upload = multer({dest: 'uploads/'});
 const numOfPoints = 500;
 const confidenceLevel = 0.95;
 let ranges = [];
+let numbers = [];
 
 app.use(cors());
 app.use(express.json());
@@ -24,8 +26,11 @@ app.post('/upload', upload.single('file'), (req, res) => {
             return res.status(500).send('Error processing file');
         }
         fs.unlinkSync(filePath);
-        const numbers = data.split(/\s+/).map(Number);
+        numbers = data.split(/\s+/).map(Number);
         ranges = [];
+        let anomaliesX = [];
+        let anomaliesY = [];
+
         const numClasses = parseInt(req.body.numClasses) || calculateNumClasses(numbers);
         const bandwidth = parseFloat(req.body.bandwidth) || calculateBandwidth(numbers);
 
@@ -34,7 +39,17 @@ app.post('/upload', upload.single('file'), (req, res) => {
         const kdeData = calculateKDE(numbers, bandwidth, numClasses);
         const ecdfData = calculateECDF(statistics.frequenciesArray);
 
-        res.json({
+        console.log('numbers: ' + numbers)
+        numbers.forEach((num, index) => {
+            anomaliesX.push(index);
+            anomaliesY.push(num);
+        });
+        const bounds = findBounds(numbers);
+        const anomalies = findAnomalies(numbers, bounds.lowerBound, bounds.upperBound);
+        console.log('bounds: ' + bounds)
+
+        return res.json({
+            numbers: numbers,
             boundaries: statistics.boundaries,
             frequencies: statistics.frequencies,
             relativeFrequencies: statistics.relativeFrequencies,
@@ -44,8 +59,57 @@ app.post('/upload', upload.single('file'), (req, res) => {
             kdeX: kdeData.x_values,
             kdeY: kdeData.y,
             ecdfX: ecdfData.x,
-            ecdfY: ecdfData.y
+            ecdfY: ecdfData.y,
+            boundariesAnomalies: bounds,
+            anomaliesX: anomaliesX,
+            anomaliesY: anomaliesY,
+            anomalies: anomalies
         });
+    });
+});
+
+app.post('/update-numbers', (req, res) => {
+    const { numbers: updatedNumbers } = req.body;
+
+    if (!Array.isArray(updatedNumbers)) {
+        return res.status(400).send('Invalid data format. Expected an array.');
+    }
+
+    numbers = updatedNumbers;
+    console.log('Numbers updated on backend:', numbers);
+
+    ranges = [];
+    let anomaliesX = [];
+    let anomaliesY = [];
+
+    const numClasses = parseInt(req.body.numClasses) || calculateNumClasses(numbers);
+    const bandwidth = parseFloat(req.body.bandwidth) || calculateBandwidth(numbers);
+
+    const statistics = calculateStatistics(numbers, numClasses);
+    const estimatedStatistic = estimateStatistics(numbers);
+    const kdeData = calculateKDE(numbers, bandwidth, numClasses);
+    const ecdfData = calculateECDF(statistics.frequenciesArray);
+
+    console.log('numbers: ' + numbers)
+    numbers.forEach((num, index) => {
+        anomaliesX.push(index);
+        anomaliesY.push(num);
+    });
+
+    return res.json({
+        numbers: numbers,
+        boundaries: statistics.boundaries,
+        frequencies: statistics.frequencies,
+        relativeFrequencies: statistics.relativeFrequencies,
+        empiricalDistributions: statistics.empiricalDistributions,
+        x: statistics.ranges,
+        y: statistics.relativeFrequencies,
+        kdeX: kdeData.x_values,
+        kdeY: kdeData.y,
+        ecdfX: ecdfData.x,
+        ecdfY: ecdfData.y,
+        anomaliesX: anomaliesX,
+        anomaliesY: anomaliesY,
     });
 });
 
@@ -114,7 +178,7 @@ function calcKurtosis(data, mean, n, stdDev0) {
 
 function estimateStatistics(data) {
     const n = data.length;
-    const sortedData = data.sort((a, b) => a - b);
+    const sortedData = [...data].sort((a, b) => a - b);
 
     const mean = data.reduce((a, b) => a + b, 0) / n;
     const median = calcMedian(sortedData, n);
@@ -132,7 +196,7 @@ function estimateStatistics(data) {
     const semKurtosis = Math.sqrt((24 * n * Math.pow((n - 1), 2)) / ((n - 2) * (n - 3) * (n + 3) * (n + 5)));
 
     const alfa = 1 - confidenceLevel;
-    const zValue = jStat.normal.inv(1 - alfa / 2, 0, 1);
+    const zValue = jStat.normal.inv(1 - alfa / 2, 0, 1); //квантиль стандартного нормального розподілу (1.96)
     console.log(zValue)
     const meanCI = {x: (mean - (zValue * semMean)), y: (mean + (zValue * semMean))};
     const medianCI = {x: sortedData[( Math.ceil((n / 2) - (zValue * (Math.sqrt(n) / 2))) - 1)], y: sortedData[( Math.ceil((n / 2) + 1 + (zValue * (Math.sqrt(n) / 2))) - 1)]};
@@ -171,6 +235,25 @@ function estimateStatistics(data) {
         skewnessCI,
         kurtosisCI
     }
+}
+
+function findBounds(data) {
+    const sortedData = [...data].sort((a, b) => a - b);
+    const k = 1.5;
+
+    const q1 = ss.quantile(sortedData, 0.25);
+    const q3 = ss.quantile(sortedData, 0.75);
+
+    const iqr = q3 - q1;
+
+    const lowerBound = q1 - k * iqr;
+    const upperBound = q3 + k * iqr;
+
+    return { lowerBound, upperBound };
+}
+
+function findAnomalies(data, lowerBound, upperBound){
+    return [...data].filter(x => x < lowerBound || x > upperBound);
 }
 
 function calculateStatistics(data, numClasses) {
