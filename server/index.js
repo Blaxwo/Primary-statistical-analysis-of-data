@@ -39,15 +39,14 @@ app.post('/upload', upload.single('file'), (req, res) => {
         const kdeData = calculateKDE(numbers, bandwidth, numClasses);
         const ecdfData = calculateECDF(statistics.frequenciesArray);
 
-        console.log('numbers: ' + numbers)
         numbers.forEach((num, index) => {
             anomaliesX.push(index);
             anomaliesY.push(num);
         });
         const bounds = findBounds(numbers);
         const anomalies = findAnomalies(numbers, bounds.lowerBound, bounds.upperBound);
-        console.log('bounds: ' + bounds)
-        const estimatingSkewnessAndKurtosis = estimateSkewnessKurtosis(estimatedStatistic.semSkewness,estimatedStatistic.semKurtosis, estimatedStatistic.skewness,estimatedStatistic.kurtosis)
+        const estimatingSkewnessAndKurtosis = identifyingNormDistributionSkewnessKurtosis(estimatedStatistic.semSkewness, estimatedStatistic.semKurtosis, estimatedStatistic.skewness, estimatedStatistic.kurtosis);
+        const estimatingProbPlot = identifyingNormDistributionProbPlot(numbers, estimatedStatistic.mean, estimatedStatistic.stdDev1, statistics.empiricalDistributionsForValue);
 
         return res.json({
             numbers: numbers,
@@ -65,7 +64,8 @@ app.post('/upload', upload.single('file'), (req, res) => {
             anomaliesX: anomaliesX,
             anomaliesY: anomaliesY,
             anomalies: anomalies,
-            estimatingSkewnessAndKurtosis: estimatingSkewnessAndKurtosis
+            estimatingSkewnessAndKurtosis: estimatingSkewnessAndKurtosis,
+            estimatingProbPlot: estimatingProbPlot
         });
     });
 });
@@ -78,7 +78,6 @@ app.post('/update-numbers', (req, res) => {
     }
 
     numbers = updatedNumbers;
-    console.log('Numbers updated on backend:', numbers);
 
     ranges = [];
     let anomaliesX = [];
@@ -92,7 +91,6 @@ app.post('/update-numbers', (req, res) => {
     const kdeData = calculateKDE(numbers, bandwidth, numClasses);
     const ecdfData = calculateECDF(statistics.frequenciesArray);
 
-    console.log('numbers: ' + numbers)
     numbers.forEach((num, index) => {
         anomaliesX.push(index);
         anomaliesY.push(num);
@@ -120,7 +118,6 @@ function calculateKDE(data, bandwidth, numClasses) {
     const max = Math.max(...data);
     const min = Math.min(...data);
     const classWidth = (max - min) / numClasses;
-    console.log('numClasses: ' + numClasses)
     const widthBetweenPoints = (max - min) / numOfPoints;
     const x_values = Array.from({length: numOfPoints}, (_, i) => min + i * widthBetweenPoints);
     const y = x_values.map(xi => {
@@ -150,7 +147,6 @@ function calculateBandwidth(data) {
     const n = data.length;
     const mean = data.reduce((a, b) => a + b, 0) / n;
     const stdDev = Math.sqrt(data.reduce((sum, x) => sum + Math.pow(x - mean, 2), 0) / n);
-    console.log('bandwidth:', math.std(data) * Math.pow(n, -0.2))
     return stdDev * Math.pow(n, -0.2);
 }
 
@@ -188,7 +184,7 @@ function estimateStatistics(data) {
     const variance1 = calcVariance1(data, mean, n);
     const stdDev0 = Math.sqrt(variance0);
     const stdDev1 = Math.sqrt(variance1);
-    console.log('stdDev0: ' + stdDev0)
+    //console.log('stdDev0: ' + stdDev0)
     const skewness = calcSkewness(data, mean, n, stdDev0);
     const kurtosis = calcKurtosis(data, mean, n, stdDev0);
 
@@ -199,7 +195,7 @@ function estimateStatistics(data) {
 
     const alfa = 1 - confidenceLevel;
     const zValue = jStat.normal.inv(1 - alfa / 2, 0, 1); //квантиль стандартного нормального розподілу (1.96)
-    console.log(zValue)
+    //console.log(zValue)
     const meanCI = {x: (mean - (zValue * semMean)), y: (mean + (zValue * semMean))};
     const medianCI = {
         x: sortedData[(Math.ceil((n / 2) - (zValue * (Math.sqrt(n) / 2))) - 1)],
@@ -262,7 +258,7 @@ function findAnomalies(data, lowerBound, upperBound) {
     return [...data].filter(x => x < lowerBound || x > upperBound);
 }
 
-function estimateSkewnessKurtosis(semSkewness, semKurtosis, skewness, kurtosis) {
+function identifyingNormDistributionSkewnessKurtosis(semSkewness, semKurtosis, skewness, kurtosis) {
     const alfa = 1 - confidenceLevel;
     const zValue = jStat.normal.inv(1 - alfa / 2, 0, 1);
 
@@ -272,17 +268,38 @@ function estimateSkewnessKurtosis(semSkewness, semKurtosis, skewness, kurtosis) 
     const skewNormal = Math.abs(u_a) <= zValue;
     const kurtNormal = Math.abs(u_e) <= zValue;
 
-    if(skewNormal && kurtNormal){
+    if (skewNormal && kurtNormal) {
         return `Normal distribution is identified by the coefficient of skewness and kurtosis\n
  ${Math.floor(Math.toFixed(2))} <= ${zValue.toFixed(2)} and ${Math.abs(u_e).toFixed(2)} <= ${zValue.toFixed(2)}`
-    }
-    else {
+    } else {
         const skewSign = Math.abs(u_a) > zValue ? '>' : '<=';
         const kurtSign = Math.abs(u_e) > zValue ? '>' : '<=';
 
         return `Normal distribution is NOT identified by the coefficient of skewness and kurtosis\n\n
 ${Math.abs(u_a).toFixed(2)} ${skewSign} ${zValue.toFixed(2)} and ${Math.abs(u_e).toFixed(2)} ${kurtSign} ${zValue.toFixed(2)}`;
     }
+}
+
+function identifyingNormDistributionProbPlot(data, mean, stdDev, empiricalDistributions) {
+    const sortedData = [...data].sort((a, b) => a - b);
+
+    const theoreticalQuantiles = empiricalDistributions.map(p => ss.probit(p));
+
+    const minTheoreticalQuantile = Math.min(...theoreticalQuantiles);
+    const maxTheoreticalQuantile = Math.max(...theoreticalQuantiles);
+    const lineX = [minTheoreticalQuantile, maxTheoreticalQuantile];
+    const lineY = [mean + minTheoreticalQuantile * stdDev, mean + maxTheoreticalQuantile * stdDev];
+
+    console.log('theoreticalQuantiles: ', theoreticalQuantiles, 'sortedData: ',
+        sortedData, 'lineX: ',
+        lineX, 'lineY: ',
+        lineY)
+    return {
+        theoreticalQuantiles: theoreticalQuantiles,
+        sortedData: sortedData,
+        lineX: lineX,
+        lineY: lineY
+    };
 }
 
 function calculateStatistics(data, numClasses) {
@@ -298,6 +315,7 @@ function calculateStatistics(data, numClasses) {
     let frequenciesForSingleVal = {};
     let relativeFrequencies = [];
     let empiricalDistributions = [];
+    let empiricalDistributionsForValue = [];
     let cumulativeRelativeFrequency = 0;
 
     sortedData.forEach(value => {
@@ -312,6 +330,8 @@ function calculateStatistics(data, numClasses) {
         const relativeFrequency = frequency / totalElements;
         cumulativeRelativeFrequency += relativeFrequency;
 
+        empiricalDistributionsForValue.push(cumulativeRelativeFrequency);
+
         return {
             value: Number(value),
             frequency,
@@ -319,7 +339,6 @@ function calculateStatistics(data, numClasses) {
             empiricalDistributions: cumulativeRelativeFrequency
         };
     });
-
 
     for (let i = 0; i < numClasses; i++) {
         const lowerBound = (min + i * classWidth);
@@ -361,7 +380,8 @@ function calculateStatistics(data, numClasses) {
         relativeFrequencies,
         empiricalDistributions,
         ranges,
-        frequenciesArray
+        frequenciesArray,
+        empiricalDistributionsForValue
     };
 }
 

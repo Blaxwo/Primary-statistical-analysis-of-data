@@ -23,6 +23,7 @@ function App() {
     const [boundaries, setBoundaries] = useState({ lowerBound: 0, upperBound: 0 });
     const [anomalies, setAnomalies] = useState({anomalies: []});
     const [normalDistribution, setNormalDistribution] = useState('');
+    const [normalDistributionProbPlot, setNormalDistributionProbPlot] = useState({theoreticalQuantiles: [], sortedData: [], lineX: [], lineY: []});
     const [showNormalDistribution, setShowNormalDistribution] = useState(false);
 
     const onFileChange = event => {
@@ -54,6 +55,7 @@ function App() {
                 setAnomaliesfData({ x: response.data.anomaliesX, y: response.data.anomaliesY });
                 setAnomalies({anomalies: response.data.anomalies})
                 setBoundaries({ lowerBound: response.data.boundariesAnomalies.lowerBound, upperBound: response.data.boundariesAnomalies.upperBound });
+                setNormalDistributionProbPlot({theoreticalQuantiles: response.data.estimatingProbPlot.theoreticalQuantiles, sortedData: response.data.estimatingProbPlot.sortedData, lineX: response.data.estimatingProbPlot.lineX, lineY: response.data.estimatingProbPlot.lineY})
                 setNormalDistribution(response.data.estimatingSkewnessAndKurtosis)
             })
             .catch(err => {
@@ -66,6 +68,7 @@ function App() {
                 setAnomaliesfData({ x: [], y: [] });
                 setBoundaries({upperBound: 0, lowerBound: 0});
                 setAnomalies({anomalies: []});
+                setNormalDistributionProbPlot({theoreticalQuantiles: [], sortedData: [], lineX: [], lineY: []})
                 setNormalDistribution('Data is not loaded yet');
             });
     };
@@ -178,8 +181,37 @@ function App() {
                     {showNormalDistribution ? "Hide Normal Distribution" : "Show Normal Distribution"}
                 </button>
                 {showNormalDistribution && (
-                    <div style={{ letterSpacing: "2px", lineHeight: "1.6", padding: "20px", margin: "10px 0",fontSize: "18px",textAlign: "center",}}>
-                        {normalDistribution}
+                    <div>
+                        <div style={{ letterSpacing: "2px", lineHeight: "1.6", padding: "20px", margin: "10px 0",fontSize: "18px",textAlign: "center",}}>
+                        {normalDistribution}</div>
+                        <Plot
+                            data={[
+                                {
+                                    x: normalDistributionProbPlot.theoreticalQuantiles,
+                                    y: normalDistributionProbPlot.sortedData,
+                                    type: 'scatter',
+                                    mode: 'markers',
+                                    marker: { color: 'blue' },
+                                    name: 'Observed Data'
+                                },
+                                {
+                                    x: normalDistributionProbPlot.lineX,
+                                    y: normalDistributionProbPlot.lineY,
+                                    type: 'scatter',
+                                    mode: 'lines',
+                                    line: { color: 'red' },
+                                    name: 'Theoretical Line'
+                                }
+                            ]}
+                            layout={{
+                                title: "Normal Probability Plot (Q-Q Plot)",
+                                xaxis: { title: "Theoretical Quantiles" },
+                                yaxis: { title: "Observed Data" },
+                                autosize: true,
+                                responsive: true,
+                                showlegend: true,
+                            }}
+                        />
 
                     </div>
                 )}
