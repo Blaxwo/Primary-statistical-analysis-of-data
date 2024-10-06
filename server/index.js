@@ -47,6 +47,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
         const bounds = findBounds(numbers);
         const anomalies = findAnomalies(numbers, bounds.lowerBound, bounds.upperBound);
         console.log('bounds: ' + bounds)
+        const estimatingSkewnessAndKurtosis = estimateSkewnessKurtosis(estimatedStatistic.semSkewness,estimatedStatistic.semKurtosis, estimatedStatistic.skewness,estimatedStatistic.kurtosis)
 
         return res.json({
             numbers: numbers,
@@ -63,13 +64,14 @@ app.post('/upload', upload.single('file'), (req, res) => {
             boundariesAnomalies: bounds,
             anomaliesX: anomaliesX,
             anomaliesY: anomaliesY,
-            anomalies: anomalies
+            anomalies: anomalies,
+            estimatingSkewnessAndKurtosis: estimatingSkewnessAndKurtosis
         });
     });
 });
 
 app.post('/update-numbers', (req, res) => {
-    const { numbers: updatedNumbers } = req.body;
+    const {numbers: updatedNumbers} = req.body;
 
     if (!Array.isArray(updatedNumbers)) {
         return res.status(400).send('Invalid data format. Expected an array.');
@@ -199,7 +201,10 @@ function estimateStatistics(data) {
     const zValue = jStat.normal.inv(1 - alfa / 2, 0, 1); //квантиль стандартного нормального розподілу (1.96)
     console.log(zValue)
     const meanCI = {x: (mean - (zValue * semMean)), y: (mean + (zValue * semMean))};
-    const medianCI = {x: sortedData[( Math.ceil((n / 2) - (zValue * (Math.sqrt(n) / 2))) - 1)], y: sortedData[( Math.ceil((n / 2) + 1 + (zValue * (Math.sqrt(n) / 2))) - 1)]};
+    const medianCI = {
+        x: sortedData[(Math.ceil((n / 2) - (zValue * (Math.sqrt(n) / 2))) - 1)],
+        y: sortedData[(Math.ceil((n / 2) + 1 + (zValue * (Math.sqrt(n) / 2))) - 1)]
+    };
     const stdDevCI = {x: (stdDev1 - (zValue * semStd1)), y: (stdDev1 + (zValue * semStd1))};
     const skewnessCI = {x: (skewness - (zValue * semSkewness)), y: (skewness + (zValue * semSkewness))};
     const kurtosisCI = {x: (kurtosis - (zValue * semKurtosis)), y: (kurtosis + (zValue * semKurtosis))};
@@ -211,7 +216,8 @@ function estimateStatistics(data) {
         kurtosis, 'semMean: ',
         semMean, 'semStd1: ',
         semStd1, 'semSkewness: ',
-        semSkewness, 'meanCI: ',
+        semSkewness, 'semKurtosis: ',
+        semKurtosis, 'meanCI: ',
         meanCI, 'medianCI: ',
         medianCI, 'stdDevCI: ',
         stdDevCI, 'skewnessCI: ',
@@ -249,11 +255,34 @@ function findBounds(data) {
     const lowerBound = q1 - k * iqr;
     const upperBound = q3 + k * iqr;
 
-    return { lowerBound, upperBound };
+    return {lowerBound, upperBound};
 }
 
-function findAnomalies(data, lowerBound, upperBound){
+function findAnomalies(data, lowerBound, upperBound) {
     return [...data].filter(x => x < lowerBound || x > upperBound);
+}
+
+function estimateSkewnessKurtosis(semSkewness, semKurtosis, skewness, kurtosis) {
+    const alfa = 1 - confidenceLevel;
+    const zValue = jStat.normal.inv(1 - alfa / 2, 0, 1);
+
+    const u_a = skewness / semSkewness;
+    const u_e = kurtosis / semKurtosis;
+
+    const skewNormal = Math.abs(u_a) <= zValue;
+    const kurtNormal = Math.abs(u_e) <= zValue;
+
+    if(skewNormal && kurtNormal){
+        return `Normal distribution is identified by the coefficient of skewness and kurtosis\n
+ ${Math.floor(Math.toFixed(2))} <= ${zValue.toFixed(2)} and ${Math.abs(u_e).toFixed(2)} <= ${zValue.toFixed(2)}`
+    }
+    else {
+        const skewSign = Math.abs(u_a) > zValue ? '>' : '<=';
+        const kurtSign = Math.abs(u_e) > zValue ? '>' : '<=';
+
+        return `Normal distribution is NOT identified by the coefficient of skewness and kurtosis\n\n
+${Math.abs(u_a).toFixed(2)} ${skewSign} ${zValue.toFixed(2)} and ${Math.abs(u_e).toFixed(2)} ${kurtSign} ${zValue.toFixed(2)}`;
+    }
 }
 
 function calculateStatistics(data, numClasses) {

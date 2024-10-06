@@ -21,7 +21,9 @@ function App() {
     const [showEcdf, setShowEcdf] = useState(false);
     const [showAnomalies, setShowAnomalies] = useState(false);
     const [boundaries, setBoundaries] = useState({ lowerBound: 0, upperBound: 0 });
-    const [anomalies, setAnomalies] = useState({anomalies: []})
+    const [anomalies, setAnomalies] = useState({anomalies: []});
+    const [normalDistribution, setNormalDistribution] = useState('');
+    const [showNormalDistribution, setShowNormalDistribution] = useState(false);
 
     const onFileChange = event => {
         setFile(event.target.files[0]);
@@ -52,6 +54,7 @@ function App() {
                 setAnomaliesfData({ x: response.data.anomaliesX, y: response.data.anomaliesY });
                 setAnomalies({anomalies: response.data.anomalies})
                 setBoundaries({ lowerBound: response.data.boundariesAnomalies.lowerBound, upperBound: response.data.boundariesAnomalies.upperBound });
+                setNormalDistribution(response.data.estimatingSkewnessAndKurtosis)
             })
             .catch(err => {
                 console.error('Error uploading file:', err);
@@ -63,6 +66,7 @@ function App() {
                 setAnomaliesfData({ x: [], y: [] });
                 setBoundaries({upperBound: 0, lowerBound: 0});
                 setAnomalies({anomalies: []});
+                setNormalDistribution('Data is not loaded yet');
             });
     };
 
@@ -170,6 +174,15 @@ function App() {
                     {showAnomalies ? "Hide Anomalies" : "Show Anomalies"}
                 </button>
                 <button onClick={removeAnomalies}>Remove Anomalous Values</button>
+                <button onClick={() => setShowNormalDistribution(!showNormalDistribution)}>
+                    {showNormalDistribution ? "Hide Normal Distribution" : "Show Normal Distribution"}
+                </button>
+                {showNormalDistribution && (
+                    <div style={{ letterSpacing: "2px", lineHeight: "1.6", padding: "20px", margin: "10px 0",fontSize: "18px",textAlign: "center",}}>
+                        {normalDistribution}
+
+                    </div>
+                )}
                 {showEcdf && (
                     <Plot
                         data={[
