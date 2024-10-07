@@ -96,6 +96,8 @@ app.post('/update-numbers', (req, res) => {
         anomaliesX.push(index);
         anomaliesY.push(num);
     });
+    const estimatingSkewnessAndKurtosis = identifyingNormDistributionSkewnessKurtosis(estimatedStatistic.semSkewness, estimatedStatistic.semKurtosis, estimatedStatistic.skewness, estimatedStatistic.kurtosis);
+    const estimatingProbPlot = identifyingNormDistributionProbPlot(numbers, estimatedStatistic.mean, estimatedStatistic.stdDev1, statistics.empiricalDistributionsForValue);
 
     return res.json({
         numbers: numbers,
@@ -111,6 +113,9 @@ app.post('/update-numbers', (req, res) => {
         ecdfY: ecdfData.y,
         anomaliesX: anomaliesX,
         anomaliesY: anomaliesY,
+        estimatingSkewnessAndKurtosis: estimatingSkewnessAndKurtosis,
+        estimatingProbPlot: estimatingProbPlot,
+        typicalValues: estimatedStatistic,
     });
 });
 
@@ -271,7 +276,7 @@ function identifyingNormDistributionSkewnessKurtosis(semSkewness, semKurtosis, s
 
     if (skewNormal && kurtNormal) {
         return `Normal distribution is identified by the coefficient of skewness and kurtosis\n
- ${Math.floor(Math.toFixed(2))} <= ${zValue.toFixed(2)} and ${Math.abs(u_e).toFixed(2)} <= ${zValue.toFixed(2)}`
+ ${(Math.abs(u_a).toFixed(2))} <= ${zValue.toFixed(2)} and ${Math.abs(u_e).toFixed(2)} <= ${zValue.toFixed(2)}`
     } else {
         const skewSign = Math.abs(u_a) > zValue ? '>' : '<=';
         const kurtSign = Math.abs(u_e) > zValue ? '>' : '<=';

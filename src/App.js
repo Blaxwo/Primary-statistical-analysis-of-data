@@ -142,6 +142,14 @@ function App() {
                 setKdeData({x: response.data.kdeX, y: response.data.kdeY});
                 setEcdfData({x: response.data.ecdfX, y: response.data.ecdfY});
                 setAnomaliesfData({x: response.data.anomaliesX, y: response.data.anomaliesY});
+                setNormalDistributionProbPlot({
+                    theoreticalQuantiles: response.data.estimatingProbPlot.theoreticalQuantiles,
+                    sortedData: response.data.estimatingProbPlot.sortedData,
+                    lineX: response.data.estimatingProbPlot.lineX,
+                    lineY: response.data.estimatingProbPlot.lineY
+                })
+                setNormalDistribution(response.data.estimatingSkewnessAndKurtosis)
+                setTypicalValuesChars(response.data.typicalValues)
             })
             .catch(err => {
                 console.error('Error uploading file:', err);
@@ -151,6 +159,26 @@ function App() {
                 setKdeData({x: [], y: []});
                 setEcdfData({x: [], y: []});
                 setAnomaliesfData({x: [], y: []});
+                setNormalDistributionProbPlot({theoreticalQuantiles: [], sortedData: [], lineX: [], lineY: []})
+                setNormalDistribution('Data is not loaded yet');
+                setTypicalValuesChars({
+                    mean: 0,
+                    median: 0,
+                    stdDev1: 0,
+                    skewness: 0,
+                    kurtosis: 0,
+                    min: 0,
+                    max: 0,
+                    semMean: 0,
+                    semStd1: 0,
+                    semSkewness: 0,
+                    semKurtosis: 0,
+                    meanCI: {},
+                    medianCI: {},
+                    stdDevCI: {},
+                    skewnessCI: {},
+                    kurtosisCI: {}
+                })
             });
     };
 
