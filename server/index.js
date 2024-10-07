@@ -287,7 +287,7 @@ ${Math.abs(u_a).toFixed(2)} ${skewSign} ${zValue.toFixed(2)} and ${Math.abs(u_e)
 }
 
 function identifyingNormDistributionProbPlot(data, mean, stdDev, empiricalDistributions) {
-    const sortedData = [...data].sort((a, b) => a - b);
+    const sortedData = [...new Set([...data])].sort((a, b) => a - b);
 
     const theoreticalQuantiles = empiricalDistributions.map(p => ss.probit(p));
 
@@ -336,7 +336,9 @@ function calculateStatistics(data, numClasses) {
         const relativeFrequency = frequency / totalElements;
         cumulativeRelativeFrequency += relativeFrequency;
 
-        empiricalDistributionsForValue.push(cumulativeRelativeFrequency);
+        if (!empiricalDistributionsForValue.includes(cumulativeRelativeFrequency)) {
+            empiricalDistributionsForValue.push(cumulativeRelativeFrequency);
+        }
 
         return {
             value: Number(value),
@@ -376,8 +378,12 @@ function calculateStatistics(data, numClasses) {
     frequencies.forEach((freq, index) => {
         let relFreq = freq / totalElements;
         cumulativeFrequency += relFreq;
+
+        if (!empiricalDistributions.includes(cumulativeFrequency)) {
+            empiricalDistributions.push(cumulativeFrequency);
+        }
+
         relativeFrequencies.push(relFreq);
-        empiricalDistributions.push(cumulativeFrequency);
     });
 
     return {
@@ -390,6 +396,7 @@ function calculateStatistics(data, numClasses) {
         empiricalDistributionsForValue
     };
 }
+
 
 app.listen(3001, () => {
     console.log('Server started on port 3001');
