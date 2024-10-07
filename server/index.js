@@ -60,6 +60,7 @@ app.post('/upload', upload.single('file'), (req, res) => {
             kdeY: kdeData.y,
             ecdfX: ecdfData.x,
             ecdfY: ecdfData.y,
+            typicalValues: estimatedStatistic,
             boundariesAnomalies: bounds,
             anomaliesX: anomaliesX,
             anomaliesY: anomaliesY,
