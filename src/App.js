@@ -14,6 +14,14 @@ function App() {
     });
     const [numbers, setNumbers] = useState([])
     const [kdeData, setKdeData] = useState({x: [], y: []});
+    const [densityData, setDensityData] = useState({x: [], y: []});
+    const [distributionData, setDistributionData] = useState({x: [], y: []});
+    const [pearson, setPearson] = useState({
+        chiSquareStatistic: 0,
+        criticalValue: 0,
+        pValue: 0,
+        conclusion: ''
+    })
     const [ecdfData, setEcdfData] = useState({x: [], y: []});
     const [anomaliesData, setAnomaliesfData] = useState({x: [], y: []});
     const [numClasses, setNumClasses] = useState(0);
@@ -29,6 +37,10 @@ function App() {
         lineX: [],
         lineY: []
     });
+    const [linearizedDistributionLine, setLinearizedDistributionLine] = useState({lineX: [], lineY: []});
+    const [showPearson, setShowPearson] = useState(false);
+    const [expProbPlot, setExpProbPlot] = useState({x: [], y: []});
+    const [showExpProbPlot, setShowExpProbPlot] = useState(false);
     const [showNormalDistribution, setShowNormalDistribution] = useState(false);
     const [showTypicalValuesChars, setShowTypicalValuesChars] = useState(false);
     const [typicalValuesChars, setTypicalValuesChars] = useState({
@@ -48,7 +60,14 @@ function App() {
         stdDevCI: {},
         skewnessCI: {},
         kurtosisCI: {}
-    })
+    });
+    const [paramsAndEvaluationOfDistribution, setParamsAndEvaluationOfDistribution] = useState({
+        lambda: 0,
+        stdErr: 0,
+        ci: {}
+
+    });
+    const [showParamsAndEvaluationOfDistribution, setShowParamsAndEvaluationOfDistribution] = useState(false);
 
     const onFileChange = event => {
         setFile(event.target.files[0]);
@@ -75,6 +94,10 @@ function App() {
                 });
                 setPlotData({x: response.data.x, y: response.data.y});
                 setKdeData({x: response.data.kdeX, y: response.data.kdeY});
+                setDensityData({x: response.data.densityX, y: response.data.densityY});
+                setDistributionData({x: response.data.distributionX, y: response.data.distributionY});
+                setLinearizedDistributionLine({lineX: response.data.linearizedDistributionLineX, lineY: response.data.linearizedDistributionLineY});
+                setExpProbPlot({x: response.data.expX, y: response.data.expY});
                 setEcdfData({x: response.data.ecdfX, y: response.data.ecdfY});
                 setAnomaliesfData({x: response.data.anomaliesX, y: response.data.anomaliesY});
                 setAnomalies({anomalies: response.data.anomalies})
@@ -90,6 +113,13 @@ function App() {
                 })
                 setNormalDistribution(response.data.estimatingSkewnessAndKurtosis)
                 setTypicalValuesChars(response.data.typicalValues)
+                setParamsAndEvaluationOfDistribution(response.data.paramsAndEvaluationOfDistribution)
+                setPearson({
+                    conclusion: response.data.pearson.conclusion,
+                    criticalValue: response.data.pearson.criticalValue,
+                    pValue: response.data.pearson.pValue,
+                    chiSquareStatistic: response.data.pearson.chiSquareStatistic
+                })
             })
             .catch(err => {
                 console.error('Error uploading file:', err);
@@ -97,6 +127,10 @@ function App() {
                 setClassData({boundaries: [], frequencies: [], relativeFrequencies: [], empiricalDistributions: []});
                 setPlotData({x: [], y: []});
                 setKdeData({x: [], y: []});
+                setDensityData({x: [], y: []});
+                setDistributionData({x: [], y: []});
+                setLinearizedDistributionLine({lineX: [], lineY: []});
+                setExpProbPlot({x: [], y: []});
                 setEcdfData({x: [], y: []});
                 setAnomaliesfData({x: [], y: []});
                 setBoundaries({upperBound: 0, lowerBound: 0});
@@ -120,6 +154,11 @@ function App() {
                     stdDevCI: {},
                     skewnessCI: {},
                     kurtosisCI: {}
+                })
+                setParamsAndEvaluationOfDistribution({
+                    lambda: 0,
+                    stdErr: 0,
+                    ci: {}
                 })
             });
     };
@@ -228,8 +267,9 @@ function App() {
                             x: plotData.x,
                             y: plotData.y,
                             type: 'bar',
-                            marker: {color: 'blue'},
+                            marker: {color: 'pink'},
                             offset: 0,
+                            name: 'Histogram'
                         },
                         {
                             x: kdeData.x,
@@ -238,6 +278,14 @@ function App() {
                             mode: 'lines',
                             line: {color: 'red'},
                             name: 'KDE'
+                        },
+                        {
+                            x: densityData.x,
+                            y: densityData.y,
+                            type: 'scatter',
+                            mode: 'lines',
+                            line: {color: 'purple'},
+                            name: 'Density'
                         }
                     ]}
                     layout={{
@@ -265,6 +313,100 @@ function App() {
                 <button onClick={() => setShowNormalDistribution(!showNormalDistribution)}>
                     {showNormalDistribution ? "Hide Normal Distribution" : "Show Normal Distribution"}
                 </button>
+                <button onClick={() => setShowParamsAndEvaluationOfDistribution(!showParamsAndEvaluationOfDistribution)}>
+                    {showParamsAndEvaluationOfDistribution ? "Hide evaluation/parameters" : "Show evaluation/parameters"}
+                </button>
+                <button onClick={() => setShowPearson(!showPearson)}>
+                    {showPearson ? "Hide pearson" : "Show pearson"}
+                </button>
+                <button onClick={() => setShowExpProbPlot(!showExpProbPlot)}>
+                    {showExpProbPlot ? "Hide exp plot" : "Show exp plot"}
+                </button>
+                {showPearson && (
+                    <div style={{marginTop: "20px"}}>
+                        <table style={{width: "100%", border: "1px solid blue", margin: "20px 0"}}>
+                            <thead>
+                            <tr>
+                                <th>Chi square statistic</th>
+                                <th>Critical value</th>
+                                <th>P value</th>
+                                <th>Conclusion</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr>
+                                <td>{pearson.chiSquareStatistic}</td>
+                                <td>{pearson.criticalValue}</td>
+                                <td>{pearson.pValue}</td>
+                                <td>{pearson.conclusion}</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+                {showParamsAndEvaluationOfDistribution && (
+                    <div style={{marginTop: "20px"}}>
+                        <table style={{width: "100%", border: "1px solid blue", margin: "20px 0"}}>
+                            <thead>
+                            <tr>
+                                <th>Parameter</th>
+                                <th>Evaluation</th>
+                                <th>Std Err</th>
+                                <th>Confidence Interval</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr>
+                                <td>λ</td>
+                                <td>{paramsAndEvaluationOfDistribution.lambda.toFixed(4)}</td>
+                                <td>{paramsAndEvaluationOfDistribution.stdErr.toFixed(4)}</td>
+                                <td>[{paramsAndEvaluationOfDistribution.ci.x.toFixed(4)}, {paramsAndEvaluationOfDistribution.ci.y.toFixed(4)}]</td>
+                            </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+                {showExpProbPlot && (
+                    <div>
+                        <div style={{
+                            letterSpacing: "2px",
+                            lineHeight: "1.6",
+                            padding: "20px",
+                            margin: "10px 0",
+                            fontSize: "18px",
+                            textAlign: "center",
+                        }}></div>
+                        <Plot
+                            data={[
+                                {
+                                    x: expProbPlot.x,
+                                    y: expProbPlot.y,
+                                    type: 'scatter',
+                                    mode: 'markers',
+                                    marker: {color: 'blue'},
+                                    name: 'Observed Data'
+                                },
+                                {
+                                    x: linearizedDistributionLine.lineX,
+                                    y: linearizedDistributionLine.lineY,
+                                    type: 'scatter',
+                                    mode: 'lines',
+                                    line: {color: 'purple'},
+                                    name: 'Linearized Distribution Line'
+                                }
+                            ]}
+                            layout={{
+                                title: "Exp Probability Plot (Q-Q Plot)",
+                                xaxis: {title: "t"},
+                                yaxis: {title: "z"},
+                                autosize: true,
+                                responsive: true,
+                                showlegend: true,
+                            }}
+                        />
+
+                    </div>
+                )}
                 {showNormalDistribution && (
                     <div>
                         <div style={{
@@ -374,6 +516,14 @@ function App() {
                                 type: 'scatter',
                                 mode: 'lines',
                                 line: {color: 'green', shape: 'hv'},
+                            },
+                            {
+                                x: distributionData.x,
+                                y: distributionData.y,
+                                type: 'scatter',
+                                mode: 'lines',
+                                line: {color: 'purple'},
+                                name: 'Distribution'
                             }
                         ]}
                         layout={{

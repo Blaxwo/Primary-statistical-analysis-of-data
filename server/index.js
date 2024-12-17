@@ -46,11 +46,17 @@ app.post('/upload', upload.single('file'), (req, res) => {
         const bounds = findBounds(numbers);
         const anomalies = findAnomalies(numbers, bounds.lowerBound, bounds.upperBound);
         const estimatingSkewnessAndKurtosis = identifyingNormDistributionSkewnessKurtosis(estimatedStatistic.semSkewness, estimatedStatistic.semKurtosis, estimatedStatistic.skewness, estimatedStatistic.kurtosis);
-        const estimatingProbPlot = identifyingNormDistributionProbPlot(numbers, estimatedStatistic.mean, estimatedStatistic.stdDev1, statistics.empiricalDistributionsForValue);
-
+        const paramsAndEvaluationOfDistribution = estimateParamsAndEvaluationOfDistribution(numbers, estimatedStatistic.mean, estimatedStatistic.zValue)
+        const estimatingProbPlot = identifyingNormDistributionProbPlot(numbers, estimatedStatistic.mean, estimatedStatistic.stdDev1, statistics.empiricalDistributionsForValue, paramsAndEvaluationOfDistribution.lambda);
+        const estimatingExpProbPlot = identifyingExrProbPlot(numbers, statistics.empiricalDistributionsForValue);
+        const densityData = calculateDensity(numbers, numClasses, paramsAndEvaluationOfDistribution.lambda);
+        const distributionData = calculateDistribution(statistics.frequenciesArray, paramsAndEvaluationOfDistribution.lambda);
+        const theoreticalFrequencies = calculateTheoreticalFrequencies(statistics.clearBoundaries, numbers.length, paramsAndEvaluationOfDistribution.lambda);
+        const pearson = pearsonChiSquareTest(statistics.frequencies, theoreticalFrequencies);
         return res.json({
             numbers: numbers,
             boundaries: statistics.boundaries,
+            clearBoundaries: statistics.clearBoundaries,
             frequencies: statistics.frequencies,
             relativeFrequencies: statistics.relativeFrequencies,
             empiricalDistributions: statistics.empiricalDistributions,
@@ -58,15 +64,25 @@ app.post('/upload', upload.single('file'), (req, res) => {
             y: statistics.relativeFrequencies,
             kdeX: kdeData.x_values,
             kdeY: kdeData.y,
+            densityX: densityData.x,
+            densityY: densityData.y,
+            distributionX: distributionData.x,
+            distributionY: distributionData.y,
             ecdfX: ecdfData.x,
             ecdfY: ecdfData.y,
+            expX: estimatingExpProbPlot.x,
+            expY: estimatingExpProbPlot.y,
+            linearizedDistributionLineX: estimatingExpProbPlot.lineX,
+            linearizedDistributionLineY: estimatingExpProbPlot.lineY,
             typicalValues: estimatedStatistic,
             boundariesAnomalies: bounds,
             anomaliesX: anomaliesX,
             anomaliesY: anomaliesY,
             anomalies: anomalies,
             estimatingSkewnessAndKurtosis: estimatingSkewnessAndKurtosis,
-            estimatingProbPlot: estimatingProbPlot
+            estimatingProbPlot: estimatingProbPlot,
+            paramsAndEvaluationOfDistribution: paramsAndEvaluationOfDistribution,
+            pearson: pearson
         });
     });
 });
@@ -137,10 +153,28 @@ function calculateKDE(data, bandwidth, numClasses) {
     return {x_values, y};
 }
 
+function calculateDensity(data, numClasses, lambda) {
+    const max = Math.max(...data);
+    const min = Math.min(...data);
+    const classWidth = (max - min) / numClasses;
+    const widthBetweenPoints = (max - min) / numOfPoints;
+    const x = Array.from({length: numOfPoints}, (_, i) => min + i * widthBetweenPoints);
+    const y = x.map(xi => {
+        return (lambda * Math.exp(lambda * xi * -1) * classWidth);
+    });
+    return {x, y};
+}
+
 //    const kde = data.reduce((a, b) => a + Math.exp((-Math.pow(((x-b)/bandwidth), 2)/2))/(Math.sqrt(2 * Math.PI)), 0) / (n * bandwidth)
 function calculateECDF(frequenciesArray) {
     const x = frequenciesArray.map((el) => el.value);
-    const y = frequenciesArray.map((el) => el.empiricalDistributions)
+    const y = frequenciesArray.map((el) => el.empiricalDistributions);
+    return {x, y};
+}
+
+function calculateDistribution(data, lambda) {
+    const x = data.map((el) => el.value);
+    const y = data.map((el) => 1 - Math.exp(el.value * lambda * -1));
     return {x, y};
 }
 
@@ -211,20 +245,6 @@ function estimateStatistics(data) {
     const skewnessCI = {x: (skewness - (zValue * semSkewness)), y: (skewness + (zValue * semSkewness))};
     const kurtosisCI = {x: (kurtosis - (zValue * semKurtosis)), y: (kurtosis + (zValue * semKurtosis))};
 
-    console.log('mean: ', mean, 'median: ',
-        median, 'stdDev1: ',
-        stdDev1, 'skewness: ',
-        skewness, 'kurtosis: ',
-        kurtosis, 'semMean: ',
-        semMean, 'semStd1: ',
-        semStd1, 'semSkewness: ',
-        semSkewness, 'semKurtosis: ',
-        semKurtosis, 'meanCI: ',
-        meanCI, 'medianCI: ',
-        medianCI, 'stdDevCI: ',
-        stdDevCI, 'skewnessCI: ',
-        skewnessCI, 'kurtosisCI: ',
-        kurtosisCI)
     return {
         mean,
         median,
@@ -241,7 +261,8 @@ function estimateStatistics(data) {
         medianCI,
         stdDevCI,
         skewnessCI,
-        kurtosisCI
+        kurtosisCI,
+        zValue
     }
 }
 
@@ -286,7 +307,7 @@ ${Math.abs(u_a).toFixed(2)} ${skewSign} ${zValue.toFixed(2)} and ${Math.abs(u_e)
     }
 }
 
-function identifyingNormDistributionProbPlot(data, mean, stdDev, empiricalDistributions) {
+function identifyingNormDistributionProbPlot(data, mean, stdDev, empiricalDistributions, lambda) {
     const sortedData = [...new Set([...data])].sort((a, b) => a - b);
 
     const theoreticalQuantiles = empiricalDistributions.map(p => ss.probit(p));
@@ -296,17 +317,107 @@ function identifyingNormDistributionProbPlot(data, mean, stdDev, empiricalDistri
     const lineX = [minTheoreticalQuantile, maxTheoreticalQuantile];
     const lineY = [mean + minTheoreticalQuantile * stdDev, mean + maxTheoreticalQuantile * stdDev];
 
-    console.log('theoreticalQuantiles: ', theoreticalQuantiles, 'sortedData: ',
-        sortedData, 'lineX: ',
-        lineX, 'lineY: ',
-        lineY)
+    const linearizedDistributionLineX = [minTheoreticalQuantile, maxTheoreticalQuantile];
+    console.log(lambda, minTheoreticalQuantile, maxTheoreticalQuantile);
+    const zt = theoreticalQuantiles.reduce((sum, x) => sum + ((Math.log(Math.exp(lambda * x)) / Math.log(10)) * x));
+    const t2 = theoreticalQuantiles.reduce((sum, x) => sum + (Math.pow(x, 2)), 0);
+    const a = zt / t2;
+    const linearizedDistributionLineY = [minTheoreticalQuantile * a, a * maxTheoreticalQuantile];
+
     return {
         theoreticalQuantiles: theoreticalQuantiles,
         sortedData: sortedData,
         lineX: lineX,
-        lineY: lineY
+        lineY: lineY,
+        linearizedDistributionLineX: linearizedDistributionLineX,
+        linearizedDistributionLineY: linearizedDistributionLineY
     };
 }
+
+function identifyingExrProbPlot(data, empiricalDistributions) {
+    const sortedData = [...new Set([...data])].sort((a, b) => a - b);
+
+    let theoreticalQuantiles = empiricalDistributions.map(p => -Math.log(1 - p));
+    theoreticalQuantiles.pop()
+    console.log('theoreticalQuantiles: ', theoreticalQuantiles)
+
+    const minTheoreticalQuantile = Math.min(...theoreticalQuantiles);
+    console.log('minTheoreticalQuantile', minTheoreticalQuantile)
+    const maxTheoreticalQuantile = Math.max(...theoreticalQuantiles);
+    console.log('maxTheoreticalQuantile', maxTheoreticalQuantile)
+    const lineX = [minTheoreticalQuantile, maxTheoreticalQuantile];
+    console.log('lineX: ', lineX)
+
+    const lambda = sortedData.length / sortedData.reduce((sum, x) => sum + x, 0);
+
+    const linearizedDistributionLineY = lineX.map(x => x / lambda);
+    console.log('linearizedDistributionLineY: ', linearizedDistributionLineY)
+    console.log('[lineX[0], linearizedDistributionLineY[0]]: ', [lineX[0], linearizedDistributionLineY[0]])
+    console.log('[lineX[1], linearizedDistributionLineY[1]]: ', [lineX[1], linearizedDistributionLineY[1]])
+
+    return {
+        x: theoreticalQuantiles,
+        y: sortedData,
+        lineX: [lineX[0], lineX[1]],
+        lineY: [linearizedDistributionLineY[0], linearizedDistributionLineY[1]],
+    };
+}
+
+function estimateParamsAndEvaluationOfDistribution(numbers, mean, zValue) {
+    const lambda = 1 / mean;
+
+    const stdErrLambda = Math.sqrt((1 / Math.pow(lambda, 2)));
+
+    const ciLowerLambda = lambda - (zValue * stdErrLambda);
+    const ciUpperLambda = lambda + (zValue * stdErrLambda);
+
+    return {
+        lambda: lambda,
+        stdErr: stdErrLambda,
+        ci: {x: ciLowerLambda, y: ciUpperLambda}
+    };
+}
+
+function pearsonChiSquareTest(observedFrequencies, expectedFrequencies, alpha = 0.05) {
+    const degreesOfFreedom = observedFrequencies.length - 1;
+    const chiSquareStatistic = observedFrequencies.reduce((sum, observed, index) => {
+        const expected = expectedFrequencies[index];
+        return sum + Math.pow(observed - expected, 2) / expected;
+    }, 0);
+
+    const criticalValue = jStat.chisquare.inv(1 - alpha, degreesOfFreedom);
+    console.log(criticalValue)
+    const pValue = 1 - jStat.chisquare.cdf(chiSquareStatistic, degreesOfFreedom);
+    console.log(pValue)
+
+    const isDistributionValid = chiSquareStatistic <= criticalValue;
+
+    return {
+        chiSquareStatistic: chiSquareStatistic.toFixed(4),
+        criticalValue: criticalValue.toFixed(4),
+        pValue: pValue.toFixed(4),
+        conclusion: isDistributionValid
+            ? 'The distribution is likely valid based on the Pearson Chi-Square test.'
+            : 'The distribution is not likely valid based on the Pearson Chi-Square test.'
+    };
+}
+
+function calculateTheoreticalFrequencies(bounds, totalObservations, lambda) {
+    const theoreticalFrequencies = [];
+
+    for (let i = 0; i < bounds.length; i++) {
+        const lowerBound = bounds[i].lowerBound;
+        const upperBound = bounds[i].upperBound;
+
+        const probability = (1 - Math.exp(-1 * lambda * upperBound)) - (1 - Math.exp(-1 * lambda * lowerBound));
+
+        const frequency = totalObservations * probability;
+        theoreticalFrequencies.push(frequency);
+    }
+
+    return theoreticalFrequencies;
+}
+
 
 function calculateStatistics(data, numClasses) {
     const max = Math.max(...data);
@@ -388,6 +499,7 @@ function calculateStatistics(data, numClasses) {
 
     return {
         boundaries: boundaries.map(b => `${b.lowerBound.toFixed(2)} to ${b.upperBound.toFixed(2)}`),
+        clearBoundaries: boundaries,
         frequencies,
         relativeFrequencies,
         empiricalDistributions,
