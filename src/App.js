@@ -4,32 +4,19 @@ import Plot from "react-plotly.js";
 import {useState} from "react";
 
 function App() {
+    const cellStyle = {
+        border: "1px solid black",
+        padding: "8px",
+        textAlign: "center"
+    };
+
     const [file, setFile] = useState(null);
-    const [plotData, setPlotData] = useState({x: [], y: []});
-    const [classData, setClassData] = useState({
-        boundaries: [],
-        frequencies: [],
-        relativeFrequencies: [],
-        empiricalDistributions: []
-    });
-    const [numbers, setNumbers] = useState([])
-    const [kdeData, setKdeData] = useState({x: [], y: []});
-    const [densityData, setDensityData] = useState({x: [], y: []});
-    const [distributionData, setDistributionData] = useState({x: [], y: []});
     const [pearson, setPearson] = useState({
         chiSquareStatistic: 0,
         criticalValue: 0,
         pValue: 0,
         conclusion: ''
     })
-    const [ecdfData, setEcdfData] = useState({x: [], y: []});
-    const [anomaliesData, setAnomaliesfData] = useState({x: [], y: []});
-    const [numClasses, setNumClasses] = useState(0);
-    const [bandwidth, setBandwidth] = useState(null);
-    const [showEcdf, setShowEcdf] = useState(false);
-    const [showAnomalies, setShowAnomalies] = useState(false);
-    const [boundaries, setBoundaries] = useState({lowerBound: 0, upperBound: 0});
-    const [anomalies, setAnomalies] = useState({anomalies: []});
     const [normalDistribution, setNormalDistribution] = useState('');
     const [normalDistributionProbPlot, setNormalDistributionProbPlot] = useState({
         theoreticalQuantiles: [],
@@ -37,10 +24,7 @@ function App() {
         lineX: [],
         lineY: []
     });
-    const [linearizedDistributionLine, setLinearizedDistributionLine] = useState({lineX: [], lineY: []});
     const [showPearson, setShowPearson] = useState(false);
-    const [expProbPlot, setExpProbPlot] = useState({x: [], y: []});
-    const [showExpProbPlot, setShowExpProbPlot] = useState(false);
     const [showNormalDistribution, setShowNormalDistribution] = useState(false);
     const [showTypicalValuesChars, setShowTypicalValuesChars] = useState(false);
     const [typicalValuesChars, setTypicalValuesChars] = useState({
@@ -61,13 +45,19 @@ function App() {
         skewnessCI: {},
         kurtosisCI: {}
     });
-    const [paramsAndEvaluationOfDistribution, setParamsAndEvaluationOfDistribution] = useState({
-        lambda: 0,
-        stdErr: 0,
-        ci: {}
-
-    });
-    const [showParamsAndEvaluationOfDistribution, setShowParamsAndEvaluationOfDistribution] = useState(false);
+    //
+    const [numbers, setNumbers] = useState({ numbersX: null, numbersY: null });
+    const [coefPearson, setCoefPearson] = useState(null);
+    const [coefSpearman, setCoefSpearman] = useState(null);
+    const [coefKendall, setCoefKendall] = useState(null);
+    const [coefCorRatio, setCoefCorRatio] = useState(null);
+    const [coefPearsonCorRatio, setCoefPearsonCorRatio] = useState(null);
+    const [showCoef, setShowCoef] = useState(false);
+    const [showCoefPearsonCorRatio, setShowCoefPearsonCorRatio] = useState(false);
+    const [showField, setShowField] = useState(false);
+    const [xRegression, setXRegression] = useState(false);
+    // lab 2
+    const [regressionParams, setRegressionParams] = useState(null);
 
     const onFileChange = event => {
         setFile(event.target.files[0]);
@@ -80,31 +70,9 @@ function App() {
         }
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('numClasses', numClasses);
-        formData.append('bandwidth', bandwidth);
 
         axios.post('http://localhost:3001/upload', formData)
             .then(response => {
-                setNumbers(response.data.numbers);
-                setClassData({
-                    boundaries: response.data.boundaries,
-                    frequencies: response.data.frequencies,
-                    relativeFrequencies: response.data.relativeFrequencies,
-                    empiricalDistributions: response.data.empiricalDistributions
-                });
-                setPlotData({x: response.data.x, y: response.data.y});
-                setKdeData({x: response.data.kdeX, y: response.data.kdeY});
-                setDensityData({x: response.data.densityX, y: response.data.densityY});
-                setDistributionData({x: response.data.distributionX, y: response.data.distributionY});
-                setLinearizedDistributionLine({lineX: response.data.linearizedDistributionLineX, lineY: response.data.linearizedDistributionLineY});
-                setExpProbPlot({x: response.data.expX, y: response.data.expY});
-                setEcdfData({x: response.data.ecdfX, y: response.data.ecdfY});
-                setAnomaliesfData({x: response.data.anomaliesX, y: response.data.anomaliesY});
-                setAnomalies({anomalies: response.data.anomalies})
-                setBoundaries({
-                    lowerBound: response.data.boundariesAnomalies.lowerBound,
-                    upperBound: response.data.boundariesAnomalies.upperBound
-                });
                 setNormalDistributionProbPlot({
                     theoreticalQuantiles: response.data.estimatingProbPlot.theoreticalQuantiles,
                     sortedData: response.data.estimatingProbPlot.sortedData,
@@ -113,92 +81,25 @@ function App() {
                 })
                 setNormalDistribution(response.data.estimatingSkewnessAndKurtosis)
                 setTypicalValuesChars(response.data.typicalValues)
-                setParamsAndEvaluationOfDistribution(response.data.paramsAndEvaluationOfDistribution)
                 setPearson({
                     conclusion: response.data.pearson.conclusion,
                     criticalValue: response.data.pearson.criticalValue,
                     pValue: response.data.pearson.pValue,
                     chiSquareStatistic: response.data.pearson.chiSquareStatistic
                 })
+                //
+                setNumbers({ numbersX: response.data.numbersX, numbersY: response.data.numbersY });
+                setCoefPearson(response.data.coefPearson)
+                setCoefSpearman(response.data.coefSpearman)
+                setCoefKendall(response.data.coefKendall)
+                setCoefCorRatio(response.data.coefCorRatio)
+                setCoefPearsonCorRatio(response.data.coefPearsonCorRatio)
+                // lab2
+                setRegressionParams(response.data.regressionParams)
+                setXRegression(response.data.xRegression)
             })
             .catch(err => {
                 console.error('Error uploading file:', err);
-                setNumbers([]);
-                setClassData({boundaries: [], frequencies: [], relativeFrequencies: [], empiricalDistributions: []});
-                setPlotData({x: [], y: []});
-                setKdeData({x: [], y: []});
-                setDensityData({x: [], y: []});
-                setDistributionData({x: [], y: []});
-                setLinearizedDistributionLine({lineX: [], lineY: []});
-                setExpProbPlot({x: [], y: []});
-                setEcdfData({x: [], y: []});
-                setAnomaliesfData({x: [], y: []});
-                setBoundaries({upperBound: 0, lowerBound: 0});
-                setAnomalies({anomalies: []});
-                setNormalDistributionProbPlot({theoreticalQuantiles: [], sortedData: [], lineX: [], lineY: []})
-                setNormalDistribution('Data is not loaded yet');
-                setTypicalValuesChars({
-                    mean: 0,
-                    median: 0,
-                    stdDev1: 0,
-                    skewness: 0,
-                    kurtosis: 0,
-                    min: 0,
-                    max: 0,
-                    semMean: 0,
-                    semStd1: 0,
-                    semSkewness: 0,
-                    semKurtosis: 0,
-                    meanCI: {},
-                    medianCI: {},
-                    stdDevCI: {},
-                    skewnessCI: {},
-                    kurtosisCI: {}
-                })
-                setParamsAndEvaluationOfDistribution({
-                    lambda: 0,
-                    stdErr: 0,
-                    ci: {}
-                })
-            });
-    };
-
-    const removeAnomalies = () => {
-        const updatedNumbers = numbers.filter(num => !anomalies.anomalies.includes(num));
-
-        setNumbers(updatedNumbers);
-
-        axios.post('http://localhost:3001/update-numbers', {numbers: updatedNumbers})
-            .then(response => {
-                setNumbers(response.data.numbers);
-                setClassData({
-                    boundaries: response.data.boundaries,
-                    frequencies: response.data.frequencies,
-                    relativeFrequencies: response.data.relativeFrequencies,
-                    empiricalDistributions: response.data.empiricalDistributions
-                });
-                setPlotData({x: response.data.x, y: response.data.y});
-                setKdeData({x: response.data.kdeX, y: response.data.kdeY});
-                setEcdfData({x: response.data.ecdfX, y: response.data.ecdfY});
-                setAnomaliesfData({x: response.data.anomaliesX, y: response.data.anomaliesY});
-                setNormalDistributionProbPlot({
-                    theoreticalQuantiles: response.data.estimatingProbPlot.theoreticalQuantiles,
-                    sortedData: response.data.estimatingProbPlot.sortedData,
-                    lineX: response.data.estimatingProbPlot.lineX,
-                    lineY: response.data.estimatingProbPlot.lineY
-                })
-                setNormalDistribution(response.data.estimatingSkewnessAndKurtosis)
-                setTypicalValuesChars(response.data.typicalValues)
-            })
-            .catch(err => {
-                console.error('Error uploading file:', err);
-                setNumbers([]);
-                setClassData({boundaries: [], frequencies: [], relativeFrequencies: [], empiricalDistributions: []});
-                setPlotData({x: [], y: []});
-                setKdeData({x: [], y: []});
-                setEcdfData({x: [], y: []});
-                setAnomaliesfData({x: [], y: []});
-                setNormalDistributionProbPlot({theoreticalQuantiles: [], sortedData: [], lineX: [], lineY: []})
                 setNormalDistribution('Data is not loaded yet');
                 setTypicalValuesChars({
                     mean: 0,
@@ -223,230 +124,220 @@ function App() {
 
     return (
         <div className="App" style={{display: "flex", justifyContent: "space-between", height: "100vh"}}>
-            <div style={{width: "50%", padding: "20px"}}>
-                <div style={{margin: "30px 0 30px 0"}}>
-                    <input type="file" onChange={onFileChange}/>
-                    <div>Num of classes:</div>
-                    <input type="number" value={numClasses} onChange={e => setNumClasses(e.target.value)}/>
-                    <div>Bandwidth:</div>
-                    <input type="number" placeholder="Bandwidth" value={bandwidth}
-                           onChange={e => setBandwidth(e.target.value)}/>
-                    <button onClick={onFileUpload}>Upload and Calculate</button>
-                </div>
-
-                <div style={{maxHeight: "300px", overflowX: "auto"}}>
-                    <table>
-                        <thead>
-                        <tr>
-                            <th style={{width: "80px", borderRight: "1px solid blue"}}>Class No.</th>
-                            <th style={{width: "200px", borderRight: "1px solid blue"}}>Boundaries</th>
-                            <th style={{width: "100px", borderRight: "1px solid blue"}}>Frequency</th>
-                            <th style={{width: "225px", borderRight: "1px solid blue"}}>Relative Frequency</th>
-                            <th style={{width: "225px"}}>Empirical Distribution</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {classData.boundaries.length > 0 ? classData.boundaries.map((boundary, index) => (
-                            <tr key={index}>
-                                <td style={{borderRight: "1px solid blue"}}>{index + 1}</td>
-                                <td style={{borderRight: "1px solid blue"}}>{boundary}</td>
-                                <td style={{borderRight: "1px solid blue"}}>{classData.frequencies[index]}</td>
-                                <td style={{borderRight: "1px solid blue"}}>{classData.relativeFrequencies[index]}</td>
-                                <td>{classData.empiricalDistributions[index]}</td>
-                            </tr>
-                        )) : <tr>
-                            <td colSpan="5">Loading data or no data available...</td>
-                        </tr>}
-                        </tbody>
-                    </table>
-                </div>
-
-                <Plot
-                    data={[
-                        {
-                            x: plotData.x,
-                            y: plotData.y,
-                            type: 'bar',
-                            marker: {color: 'pink'},
-                            offset: 0,
-                            name: 'Histogram'
-                        },
-                        {
-                            x: kdeData.x,
-                            y: kdeData.y,
-                            type: 'scatter',
-                            mode: 'lines',
-                            line: {color: 'red'},
-                            name: 'KDE'
-                        },
-                        {
-                            x: densityData.x,
-                            y: densityData.y,
-                            type: 'scatter',
-                            mode: 'lines',
-                            line: {color: 'purple'},
-                            name: 'Density'
-                        }
-                    ]}
-                    layout={{
-                        title: "Histogram and KDE",
-                        xaxis: {title: "Boundaries"},
-                        yaxis: {title: "Relative Frequencies"},
-                        autosize: true,
-                        responsive: true,
-                        bargap: 0,
-                    }}
-                />
+            <div style={{margin: "30px 0 30px 0"}}>
+                <input type="file" onChange={onFileChange}/>
+                <button onClick={onFileUpload}>Upload and Calculate</button>
             </div>
 
             <div style={{width: "50%", padding: "20px", textAlign: "center"}}>
-                <button onClick={() => setShowEcdf(!showEcdf)}>
-                    {showEcdf ? "Hide ECDF" : "Show ECDF"}
-                </button>
-                <button onClick={() => setShowAnomalies(!showAnomalies)}>
-                    {showAnomalies ? "Hide Anomalies" : "Show Anomalies"}
+                <button onClick={() => setShowCoef(!showCoef)}>
+                    {showCoef ? "Hide Coefs" : "Show Coefs"}
                 </button>
                 <button onClick={() => setShowTypicalValuesChars(!showTypicalValuesChars)}>
                     {showTypicalValuesChars ? "Hide Typical Values" : "Show Typical Values"}
                 </button>
-                <button onClick={removeAnomalies}>Remove Anomalous Values</button>
-                <button onClick={() => setShowNormalDistribution(!showNormalDistribution)}>
-                    {showNormalDistribution ? "Hide Normal Distribution" : "Show Normal Distribution"}
+                <button onClick={() => setShowField(!showField)}>
+                    {showField ? "Hide Field" : "Show Field"}
                 </button>
-                <button onClick={() => setShowParamsAndEvaluationOfDistribution(!showParamsAndEvaluationOfDistribution)}>
-                    {showParamsAndEvaluationOfDistribution ? "Hide evaluation/parameters" : "Show evaluation/parameters"}
-                </button>
-                <button onClick={() => setShowPearson(!showPearson)}>
-                    {showPearson ? "Hide pearson" : "Show pearson"}
-                </button>
-                <button onClick={() => setShowExpProbPlot(!showExpProbPlot)}>
-                    {showExpProbPlot ? "Hide exp plot" : "Show exp plot"}
-                </button>
-                {showPearson && (
-                    <div style={{marginTop: "20px"}}>
-                        <table style={{width: "100%", border: "1px solid blue", margin: "20px 0"}}>
+                {regressionParams && (
+                    <div style={{ marginTop: "20px" }}>
+                        <h3>Оцінки параметрів регресії</h3>
+                        <table style={{ width: "100%", border: "1px solid black", borderCollapse: "collapse" }}>
                             <thead>
                             <tr>
-                                <th>Chi square statistic</th>
-                                <th>Critical value</th>
-                                <th>P value</th>
-                                <th>Conclusion</th>
+                                <th style={cellStyle}>Значення оцінки параметра</th>
+                                <th style={cellStyle}>Середньоквадратичне відхилення оцінки</th>
+                                <th style={cellStyle}>95% довірчий інтервал</th>
+                                <th style={cellStyle}>Статистика</th>
+                                <th style={cellStyle}>Квантиль</th>
+                                <th style={cellStyle}>Значущість</th>
                             </tr>
                             </thead>
                             <tbody>
                             <tr>
-                                <td>{pearson.chiSquareStatistic}</td>
-                                <td>{pearson.criticalValue}</td>
-                                <td>{pearson.pValue}</td>
-                                <td>{pearson.conclusion}</td>
+                                <td style={cellStyle}>a0: {regressionParams.a0?.toFixed(4)}</td>
+                                <td style={cellStyle}>{regressionParams.std_a0?.toFixed(4)}</td>
+                                <td style={cellStyle}>[{regressionParams.a0_lower?.toFixed(4)}, {regressionParams.a0_upper?.toFixed(4)}]</td>
+                                <td style={cellStyle}>{regressionParams.t_a0?.toFixed(4)}</td>
+                                <td style={cellStyle}>{regressionParams.t_critical?.toFixed(4)}</td>
+                                <td style={cellStyle}>{regressionParams.conclusionA0}</td>
+                            </tr>
+                            <tr>
+                                <td style={cellStyle}>a1: {regressionParams.a1?.toFixed(4)}</td>
+                                <td style={cellStyle}>{regressionParams.std_a1?.toFixed(4)}</td>
+                                <td style={cellStyle}>[{regressionParams.a1_lower?.toFixed(4)}, {regressionParams.a1_upper?.toFixed(4)}]</td>
+                                <td style={cellStyle}>{regressionParams.t_a1?.toFixed(4)}</td>
+                                <td style={cellStyle}>{regressionParams.t_critical?.toFixed(4)}</td>
+                                <td style={cellStyle}>{regressionParams.conclusionA1}</td>
+                            </tr>
+                            <tr>
+                                <td style={cellStyle}>Залишкова дисперсія: {regressionParams.sResSquared}</td>
+                            </tr>
+                            <tr>
+                                <td style={cellStyle}>Коефіцієнт детермінації: {regressionParams.r_squared}</td>
+                            </tr>
+                            <tr>
+                                <td style={cellStyle}>F-test stat:{regressionParams.fStat} critical:{regressionParams.f_critical} conclusion: {regressionParams.conclusionF}</td>
+                            </tr>
+                            <td style={cellStyle}>
+                                x: {xRegression.x} Регресія для X: {xRegression.yPred} Довірчій інтервал:
+                                [{xRegression.ciReg[0].toFixed(4)}, {xRegression.ciReg[1].toFixed(4)}]
+                                [{xRegression.ciPred[0].toFixed(4)}, {xRegression.ciPred[1].toFixed(4)}]
+                            </td>
+                            </tbody>
+                        </table>
+                    </div>
+                )}
+
+                {showField && (
+                    <div style={{ marginTop: "20px" }}>
+                        <h3>Construction of a correlation field</h3>
+                        <Plot
+                            data={[
+                                {
+                                    x: numbers.numbersX,
+                                    y: numbers.numbersY,
+                                    mode: 'markers',
+                                    type: 'scatter',
+                                    name: 'Data',
+                                    marker: { color: 'blue' }
+                                },
+                                {
+                                    x: numbers.numbersX,
+                                    y: regressionParams.regressionLine,
+                                    mode: 'lines',
+                                    type: 'scatter',
+                                    name: 'Regression Line',
+                                    line: { color: 'red' }
+                                },
+                                {
+                                    x: numbers.numbersX,
+                                    y: regressionParams.ciRegUpper,
+                                    mode: 'lines',
+                                    type: 'scatter',
+                                    name: 'CI Regression Upper',
+                                    line: { color: 'green', dash: 'dash' }
+                                },
+                                {
+                                    x: numbers.numbersX,
+                                    y: regressionParams.ciRegLower,
+                                    mode: 'lines',
+                                    type: 'scatter',
+                                    name: 'CI Regression Lower',
+                                    line: { color: 'green', dash: 'dash' }
+                                },
+                                {
+                                    x: numbers.numbersX,
+                                    y: regressionParams.ciPredUpper,
+                                    mode: 'lines',
+                                    type: 'scatter',
+                                    name: 'Prediction Upper',
+                                    line: { color: 'orange', dash: 'dot' }
+                                },
+                                {
+                                    x: numbers.numbersX,
+                                    y: regressionParams.ciPredLower,
+                                    mode: 'lines',
+                                    type: 'scatter',
+                                    name: 'Prediction Lower',
+                                    line: { color: 'orange', dash: 'dot' }
+                                }
+                            ]}
+                            layout={{
+                                title: 'Correlation Field with Regression and Confidence Intervals',
+                                xaxis: { title: 'X Values' },
+                                yaxis: { title: 'Y Values' }
+                            }}
+                            style={{ width: "100%", height: "500px" }}
+                        />
+                    </div>
+                )}
+
+
+                {showCoef && (
+                    <div style={{ marginTop: "20px" }}>
+                        <table style={{ width: "100%", border: "1px solid blue", borderCollapse: "collapse", margin: "20px 0" }}>
+                            <thead>
+                            <tr style={{ background: "#f0f0f0", borderBottom: "1px solid blue" }}>
+                                <th style={{ border: "1px solid blue", padding: "8px" }}>Коефіцієнт кореляції</th>
+                                <th style={{ border: "1px solid blue", padding: "8px" }}>Оцінка</th>
+                                <th style={{ border: "1px solid blue", padding: "8px" }}>Довірчий інтервал</th>
+                                <th style={{ border: "1px solid blue", padding: "8px" }}>Статистика</th>
+                                <th style={{ border: "1px solid blue", padding: "8px" }}>Квантиль</th>
+                                <th style={{ border: "1px solid blue", padding: "8px" }}>Висновок (значущий/незначущий)</th>
+                                <th style={{ border: "1px solid blue", padding: "8px" }}>Висновок щодо наявності взаємозв'язку (є/немає)</th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            <tr>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>Пірсона</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefPearson.correlation}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefPearson.correlation_lower}, {coefPearson.correlation_upper}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefPearson.stat}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefPearson.student}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefPearson.conclusionIm}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefPearson.conclusionCon}</td>
+                            </tr>
+                            <tr>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>Спірмена</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefSpearman.spearman}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>–</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefSpearman.stat}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefSpearman.student}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefSpearman.conclusionIm}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefSpearman.conclusionCon}</td>
+                            </tr>
+                            <tr>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>Кендалла</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefKendall.correlation}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>–</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefKendall.stat}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefKendall.student}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefKendall.conclusionIm}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefKendall.conclusionCon}</td>
+                            </tr>
+                            <tr>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>Кореляційне відношення</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefCorRatio.corRatio}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>–</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefCorRatio.stat}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefCorRatio.student}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefCorRatio.conclusionIm}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefCorRatio.conclusionCon}</td>
                             </tr>
                             </tbody>
                         </table>
                     </div>
                 )}
-                {showParamsAndEvaluationOfDistribution && (
-                    <div style={{marginTop: "20px"}}>
-                        <table style={{width: "100%", border: "1px solid blue", margin: "20px 0"}}>
+
+                {coefCorRatio && coefCorRatio.conclusionIm === 'significant' && (
+                    <div style={{ marginTop: "20px" }}>
+                        <table style={{ width: "100%", border: "1px solid blue", borderCollapse: "collapse", margin: "20px 0" }}>
                             <thead>
-                            <tr>
-                                <th>Parameter</th>
-                                <th>Evaluation</th>
-                                <th>Std Err</th>
-                                <th>Confidence Interval</th>
+                            <tr style={{ background: "#f0f0f0", borderBottom: "1px solid blue" }}>
+                                <th style={{ border: "1px solid blue", padding: "8px" }}>
+                                    Оцінка коефіцієнта Пірсона (розрахована за переформованим масивом)
+                                </th>
+                                <th style={{ border: "1px solid blue", padding: "8px" }}>Оцінка кореляційного відношення</th>
+                                <th style={{ border: "1px solid blue", padding: "8px" }}>Статистика</th>
+                                <th style={{ border: "1px solid blue", padding: "8px" }}>Квантиль</th>
+                                <th style={{ border: "1px solid blue", padding: "8px" }}>Висновок (рівні/нерівні)</th>
+                                <th style={{ border: "1px solid blue", padding: "8px" }}>
+                                    Висновок щодо виду залежності (лінійна/нелінійна)
+                                </th>
                             </tr>
                             </thead>
                             <tbody>
                             <tr>
-                                <td>λ</td>
-                                <td>{paramsAndEvaluationOfDistribution.lambda.toFixed(4)}</td>
-                                <td>{paramsAndEvaluationOfDistribution.stdErr.toFixed(4)}</td>
-                                <td>[{paramsAndEvaluationOfDistribution.ci.x.toFixed(4)}, {paramsAndEvaluationOfDistribution.ci.y.toFixed(4)}]</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefPearsonCorRatio.corPearson}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefPearsonCorRatio.corRatio}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefPearsonCorRatio.stat}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefPearsonCorRatio.student}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefPearsonCorRatio.conclusionEq}</td>
+                                <td style={{ border: "1px solid blue", padding: "8px" }}>{coefPearsonCorRatio.conclusionLinear}</td>
                             </tr>
                             </tbody>
                         </table>
-                    </div>
-                )}
-                {showExpProbPlot && (
-                    <div>
-                        <div style={{
-                            letterSpacing: "2px",
-                            lineHeight: "1.6",
-                            padding: "20px",
-                            margin: "10px 0",
-                            fontSize: "18px",
-                            textAlign: "center",
-                        }}></div>
-                        <Plot
-                            data={[
-                                {
-                                    x: expProbPlot.x,
-                                    y: expProbPlot.y,
-                                    type: 'scatter',
-                                    mode: 'markers',
-                                    marker: {color: 'blue'},
-                                    name: 'Observed Data'
-                                },
-                                {
-                                    x: linearizedDistributionLine.lineX,
-                                    y: linearizedDistributionLine.lineY,
-                                    type: 'scatter',
-                                    mode: 'lines',
-                                    line: {color: 'purple'},
-                                    name: 'Linearized Distribution Line'
-                                }
-                            ]}
-                            layout={{
-                                title: "Exp Probability Plot (Q-Q Plot)",
-                                xaxis: {title: "t"},
-                                yaxis: {title: "z"},
-                                autosize: true,
-                                responsive: true,
-                                showlegend: true,
-                            }}
-                        />
-
-                    </div>
-                )}
-                {showNormalDistribution && (
-                    <div>
-                        <div style={{
-                            letterSpacing: "2px",
-                            lineHeight: "1.6",
-                            padding: "20px",
-                            margin: "10px 0",
-                            fontSize: "18px",
-                            textAlign: "center",
-                        }}>
-                            {normalDistribution}</div>
-                        <Plot
-                            data={[
-                                {
-                                    x: normalDistributionProbPlot.theoreticalQuantiles,
-                                    y: normalDistributionProbPlot.sortedData,
-                                    type: 'scatter',
-                                    mode: 'markers',
-                                    marker: {color: 'blue'},
-                                    name: 'Observed Data'
-                                },
-                                {
-                                    x: normalDistributionProbPlot.lineX,
-                                    y: normalDistributionProbPlot.lineY,
-                                    type: 'scatter',
-                                    mode: 'lines',
-                                    line: {color: 'red'},
-                                    name: 'Theoretical Line'
-                                }
-                            ]}
-                            layout={{
-                                title: "Normal Probability Plot (Q-Q Plot)",
-                                xaxis: {title: "Theoretical Quantiles"},
-                                yaxis: {title: "Observed Data"},
-                                autosize: true,
-                                responsive: true,
-                                showlegend: true,
-                            }}
-                        />
-
                     </div>
                 )}
                 {showTypicalValuesChars && (
@@ -506,80 +397,6 @@ function App() {
                             </tbody>
                         </table>
                     </div>
-                )}
-                {showEcdf && (
-                    <Plot
-                        data={[
-                            {
-                                x: ecdfData.x,
-                                y: ecdfData.y,
-                                type: 'scatter',
-                                mode: 'lines',
-                                line: {color: 'green', shape: 'hv'},
-                            },
-                            {
-                                x: distributionData.x,
-                                y: distributionData.y,
-                                type: 'scatter',
-                                mode: 'lines',
-                                line: {color: 'purple'},
-                                name: 'Distribution'
-                            }
-                        ]}
-                        layout={{
-                            title: "Empirical Distribution Function (ECDF)",
-                            xaxis: {title: "Data"},
-                            yaxis: {title: "FN(x)"},
-                            autosize: true,
-                            responsive: true
-                        }}
-                    />
-                )}
-                {showAnomalies && (
-                    <Plot
-                        data={[
-                            {
-                                x: anomaliesData.x.filter((_, i) => anomaliesData.y[i] >= boundaries.lowerBound && anomaliesData.y[i] <= boundaries.upperBound),
-                                y: anomaliesData.y.filter(y => y >= boundaries.lowerBound && y <= boundaries.upperBound),
-                                type: 'scatter',
-                                mode: 'markers',
-                                marker: {color: 'blue'},
-                                name: 'Normal Data'
-                            },
-                            {
-                                x: anomaliesData.x.filter((_, i) => anomaliesData.y[i] < boundaries.lowerBound || anomaliesData.y[i] > boundaries.upperBound),
-                                y: anomaliesData.y.filter(y => y < boundaries.lowerBound || y > boundaries.upperBound),
-                                type: 'scatter',
-                                mode: 'markers',
-                                marker: {color: 'red'},
-                                name: 'Anomalies'
-                            },
-                            {
-                                x: [Math.min(...anomaliesData.x), Math.max(...anomaliesData.x)],
-                                y: [boundaries.upperBound, boundaries.upperBound],
-                                type: 'scatter',
-                                mode: 'lines',
-                                line: {color: 'red'},
-                                name: 'Upper Bound'
-                            },
-                            {
-                                x: [Math.min(...anomaliesData.x), Math.max(...anomaliesData.x)],
-                                y: [boundaries.lowerBound, boundaries.lowerBound],
-                                type: 'scatter',
-                                mode: 'lines',
-                                line: {color: 'red'},
-                                name: 'Lower Bound'
-                            }
-                        ]}
-                        layout={{
-                            title: "Data with Anomalies",
-                            xaxis: {title: "Index"},
-                            yaxis: {title: "Values"},
-                            autosize: true,
-                            responsive: true,
-                            showlegend: true
-                        }}
-                    />
                 )}
             </div>
         </div>

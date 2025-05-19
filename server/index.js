@@ -9,8 +9,7 @@ const ss = require('simple-statistics');
 
 const app = express();
 const upload = multer({dest: 'uploads/'});
-const numOfPoints = 500;
-const confidenceLevel = 0.95;
+const a = 0.05;
 let ranges = [];
 let numbers = [];
 
@@ -26,168 +25,535 @@ app.post('/upload', upload.single('file'), (req, res) => {
             return res.status(500).send('Error processing file');
         }
         fs.unlinkSync(filePath);
-        numbers = data.split(/\s+/).map(Number);
-        ranges = [];
-        let anomaliesX = [];
-        let anomaliesY = [];
+        numbers = data.split('\n').map(line => line.split(/\s+/).map(Number));
+        //const numbersX = numbers.map(row => row[0]);
+        //const numbersY = numbers.map(row => row[1]);
+        //const numbersX = [2675.7, 2437.1, 1938.3, 2149.2, 2254.5, 1964.0, 1911.4, 1888.3, 1637.4, 1666.2, 1618.4, 2361.4, 1983.8, 1917.1, 1758.3]
+        //const numbersY = [190.4, 156.4, 170.3, 174.5, 191.3, 188.5, 167.0, 191.6, 145.3, 138.2, 151.8, 222.6, 172.0, 138.2, 173.6]
 
-        const numClasses = parseInt(req.body.numClasses) || calculateNumClasses(numbers);
-        const bandwidth = parseFloat(req.body.bandwidth) || calculateBandwidth(numbers);
+        const numbersY = [19, 47, 49, 50, 56, 58, 61, 62, 66, 67, 68, 68, 69, 70, 71, 71, 73, 74, 74, 75, 76, 82, 82, 83, 88];
+        const numbersX = [9.75, 11.25, 9.45, 11.25, 7.95, 8.55, 7.2, 8.85, 10.2, 9.15, 9.75, 8.85, 7.8, 10.5, 9.45, 9.45, 8.1, 8.85, 9.6, 9.75, 6, 9.75, 13.2, 7.95, 9.75];
 
-        const statistics = calculateStatistics(numbers, numClasses);
-        const estimatedStatistic = estimateStatistics(numbers);
-        const kdeData = calculateKDE(numbers, bandwidth, numClasses);
-        const ecdfData = calculateECDF(statistics.frequenciesArray);
+        console.log('numbersX: ', numbersX);
+        console.log('numbersY: ', numbersY);
 
-        numbers.forEach((num, index) => {
-            anomaliesX.push(index);
-            anomaliesY.push(num);
-        });
-        const bounds = findBounds(numbers);
-        const anomalies = findAnomalies(numbers, bounds.lowerBound, bounds.upperBound);
+        const numClasses = calculateNumClasses(numbersX);
+        const bandwidth = calculateBandwidth(numbersX, numClasses);
+        console.log('numClasses: ', numClasses);
+        console.log('bandwidth: ', bandwidth);
+
+        const statistics = calculateStatistics(numbersX, numClasses);
+        const estimatedStatistic = estimateStatistics(numbersX);
+
+        const estimatedStatisticX = estimateStatistics(numbersX);
+        const estimatedStatisticY = estimateStatistics(numbersY);
+
         const estimatingSkewnessAndKurtosis = identifyingNormDistributionSkewnessKurtosis(estimatedStatistic.semSkewness, estimatedStatistic.semKurtosis, estimatedStatistic.skewness, estimatedStatistic.kurtosis);
         const paramsAndEvaluationOfDistribution = estimateParamsAndEvaluationOfDistribution(numbers, estimatedStatistic.mean, estimatedStatistic.zValue)
         const estimatingProbPlot = identifyingNormDistributionProbPlot(numbers, estimatedStatistic.mean, estimatedStatistic.stdDev1, statistics.empiricalDistributionsForValue, paramsAndEvaluationOfDistribution.lambda);
-        const estimatingExpProbPlot = identifyingExrProbPlot(numbers, statistics.empiricalDistributionsForValue);
-        const densityData = calculateDensity(numbers, numClasses, paramsAndEvaluationOfDistribution.lambda);
-        const distributionData = calculateDistribution(statistics.frequenciesArray, paramsAndEvaluationOfDistribution.lambda);
         const theoreticalFrequencies = calculateTheoreticalFrequencies(statistics.clearBoundaries, numbers.length, paramsAndEvaluationOfDistribution.lambda);
         const pearson = pearsonChiSquareTest(statistics.frequencies, theoreticalFrequencies);
+        /////////////////////
+        const pearsonCorCoeff = calculatePearsonCorrelationCoefficient(numbersX, numbersY);
+        const correlationRatio = calculateCorrelationRatio(numbersX, numbersY, numClasses, bandwidth);//
+        let pearsonCorRatio;
+        if(correlationRatio.conclusionIm === 'significant') {
+            console.log('Correlation ratio is significant');
+            pearsonCorRatio = calculatePearsonCorrelationRatio(numbersX, numbersY, numClasses, bandwidth, correlationRatio.corRatio);//
+        }
+        else{
+            console.log('Correlation ratio is not significant');
+            pearsonCorRatio = {corRatio: 0, corPearson: 0, stat: 0, student: 0, conclusionEq: 'equal', conclusionLinear: 'linear'};
+        }
+        const rankX = calculateRank(numbersX);
+        const rankY = calculateRank(numbersY);
+        const rankSpearman = calculateRankSpearman(rankX, rankY);
+        const rankKendall = calculateRankKendall(rankX, rankY);
+        //// lab 2
+        const valuesA1 = calculateParamValuesA1(estimatedStatisticX.stdDev1, estimatedStatisticY.stdDev1, pearsonCorCoeff.correlation);
+        //console.log("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+        console.log("valuesA1: ", valuesA1);
+        const valuesA0 = calculateParamValuesA0(numbersX, numbersY, valuesA1);
+        console.log("valuesA0: ", valuesA0);
+        const regressionParams = calculateStdA0AndA1(numbersX, numbersY, valuesA0, valuesA1, estimatedStatisticX.stdDev1);
+        const std_a0 = regressionParams.std_a0;
+        const std_a1 = regressionParams.std_a1;
+        const x = 11;
+        const xRegression = calculatePointRegressionInterval(x, regressionParams, numbersX);
+
+
         return res.json({
-            numbers: numbers,
-            boundaries: statistics.boundaries,
-            clearBoundaries: statistics.clearBoundaries,
-            frequencies: statistics.frequencies,
-            relativeFrequencies: statistics.relativeFrequencies,
-            empiricalDistributions: statistics.empiricalDistributions,
-            x: statistics.ranges,
-            y: statistics.relativeFrequencies,
-            kdeX: kdeData.x_values,
-            kdeY: kdeData.y,
-            densityX: densityData.x,
-            densityY: densityData.y,
-            distributionX: distributionData.x,
-            distributionY: distributionData.y,
-            ecdfX: ecdfData.x,
-            ecdfY: ecdfData.y,
-            expX: estimatingExpProbPlot.x,
-            expY: estimatingExpProbPlot.y,
-            linearizedDistributionLineX: estimatingExpProbPlot.lineX,
-            linearizedDistributionLineY: estimatingExpProbPlot.lineY,
+            numbersX: numbersX,
+            numbersY: numbersY,
+            coefPearson: pearsonCorCoeff,
+            coefSpearman: rankSpearman,
+            coefKendall: rankKendall,
+            coefCorRatio: correlationRatio,
+            coefPearsonCorRatio: pearsonCorRatio,
+            // lab 2
+            regressionParams: regressionParams,
+            xRegression: xRegression,
+
             typicalValues: estimatedStatistic,
-            boundariesAnomalies: bounds,
-            anomaliesX: anomaliesX,
-            anomaliesY: anomaliesY,
-            anomalies: anomalies,
             estimatingSkewnessAndKurtosis: estimatingSkewnessAndKurtosis,
             estimatingProbPlot: estimatingProbPlot,
-            paramsAndEvaluationOfDistribution: paramsAndEvaluationOfDistribution,
             pearson: pearson
         });
     });
 });
 
-app.post('/update-numbers', (req, res) => {
-    const {numbers: updatedNumbers} = req.body;
+//    const kde = data.reduce((a, b) => a + Math.exp((-Math.pow(((x-b)/bandwidth), 2)/2))/(Math.sqrt(2 * Math.PI)), 0) / (n * bandwidth)
 
-    if (!Array.isArray(updatedNumbers)) {
-        return res.status(400).send('Invalid data format. Expected an array.');
+// function calculateConfidenceInterval(correlation, n) {
+//     const zValue = jStat.normal.inv(1 - confidenceLevel / 2, 0, 1);
+//     const interval = zValue * Math.sqrt((1 - Math.pow(correlation, 2)) / (n - 2));
+//     return interval;
+// }
+
+function calculatePearsonCorrelationCoefficient(numbersX, numbersY) {
+    const n = numbersX.length;
+    const meanX = numbersX.reduce((a, b) => a + b, 0) / n;
+    const meanY = numbersY.reduce((a, b) => a + b, 0) / n;
+    const meanXY = numbersX.reduce((sum, x, index) => sum + (x * numbersY[index]), 0) / n;
+
+    //mean square deviation (shifted)
+    const stdDevX = Math.sqrt(numbersX.reduce((sum, x) => sum + Math.pow((x - meanX), 2), 0) / n);
+    const stdDevY = Math.sqrt(numbersY.reduce((sum, y) => sum + Math.pow((y - meanY), 2), 0) / n);
+
+    const correlation = (meanXY - (meanX * meanY)) / (stdDevX * stdDevY);
+
+    const stat = (correlation * Math.sqrt(n - 2)) / Math.sqrt(1 - Math.pow(correlation, 2));
+    const student = jStat.studentt.inv(1 - a / 2, n - 2);
+    const u = jStat.normal.inv(1 - a / 2, 0, 1);
+    const correlation_lower = correlation + ((correlation * (1 - Math.pow(correlation, 2))) / (2 * n)) - (u * ((1 - Math.pow(correlation, 2)) / Math.sqrt(n - 1)));
+    const correlation_upper = correlation + ((correlation * (1 - Math.pow(correlation, 2))) / (2 * n)) + (u * ((1 - Math.pow(correlation, 2)) / Math.sqrt(n - 1)));
+
+    let conclusionIm;
+    let conclusionCon;
+    if(Math.abs(stat) > student) {
+        conclusionIm = 'significant';
+        conclusionCon = 'exist'
+    }
+    else{
+        conclusionIm = 'not significant';
+        conclusionCon = 'not exist'
     }
 
-    numbers = updatedNumbers;
-
-    ranges = [];
-    let anomaliesX = [];
-    let anomaliesY = [];
-
-    const numClasses = parseInt(req.body.numClasses) || calculateNumClasses(numbers);
-    const bandwidth = parseFloat(req.body.bandwidth) || calculateBandwidth(numbers);
-
-    const statistics = calculateStatistics(numbers, numClasses);
-    const estimatedStatistic = estimateStatistics(numbers);
-    const kdeData = calculateKDE(numbers, bandwidth, numClasses);
-    const ecdfData = calculateECDF(statistics.frequenciesArray);
-
-    numbers.forEach((num, index) => {
-        anomaliesX.push(index);
-        anomaliesY.push(num);
-    });
-    const estimatingSkewnessAndKurtosis = identifyingNormDistributionSkewnessKurtosis(estimatedStatistic.semSkewness, estimatedStatistic.semKurtosis, estimatedStatistic.skewness, estimatedStatistic.kurtosis);
-    const estimatingProbPlot = identifyingNormDistributionProbPlot(numbers, estimatedStatistic.mean, estimatedStatistic.stdDev1, statistics.empiricalDistributionsForValue);
-
-    return res.json({
-        numbers: numbers,
-        boundaries: statistics.boundaries,
-        frequencies: statistics.frequencies,
-        relativeFrequencies: statistics.relativeFrequencies,
-        empiricalDistributions: statistics.empiricalDistributions,
-        x: statistics.ranges,
-        y: statistics.relativeFrequencies,
-        kdeX: kdeData.x_values,
-        kdeY: kdeData.y,
-        ecdfX: ecdfData.x,
-        ecdfY: ecdfData.y,
-        anomaliesX: anomaliesX,
-        anomaliesY: anomaliesY,
-        estimatingSkewnessAndKurtosis: estimatingSkewnessAndKurtosis,
-        estimatingProbPlot: estimatingProbPlot,
-        typicalValues: estimatedStatistic,
-    });
-});
-
-function calculateKDE(data, bandwidth, numClasses) {
-    const n = data.length;
-    const max = Math.max(...data);
-    const min = Math.min(...data);
-    const classWidth = (max - min) / numClasses;
-    const widthBetweenPoints = (max - min) / numOfPoints;
-    const x_values = Array.from({length: numOfPoints}, (_, i) => min + i * widthBetweenPoints);
-    const y = x_values.map(xi => {
-        const kernelSum = data.reduce((sum, i) => {
-            return sum + (Math.exp(-(Math.pow((xi - i) / bandwidth, 2)) / 2) / Math.sqrt(2 * Math.PI));
-        }, 0);
-        return (kernelSum * classWidth / (n * bandwidth));
-    });
-
-
-    return {x_values, y};
+    return {correlation, correlation_lower, correlation_upper, stat, student, conclusionIm, conclusionCon};
 }
 
-function calculateDensity(data, numClasses, lambda) {
-    const max = Math.max(...data);
-    const min = Math.min(...data);
-    const classWidth = (max - min) / numClasses;
-    const widthBetweenPoints = (max - min) / numOfPoints;
-    const x = Array.from({length: numOfPoints}, (_, i) => min + i * widthBetweenPoints);
-    const y = x.map(xi => {
-        return (lambda * Math.exp(lambda * xi * -1) * classWidth);
+//// lab 2
+
+function calculatePointRegressionInterval(x, regressionParams, numbersX) {
+    const n = numbersX.length;
+    const meanX = numbersX.reduce((sum, val) => sum + val, 0) / n;
+
+    const {
+        a0,
+        a1,
+        sResSquared,
+        std_a1,
+        t_critical
+    } = regressionParams;
+
+    const tCrit = t_critical;
+    const yPred = a0 + (a1 * x);
+
+    // Довірчий інтервал на середнє значення (регресія)
+    const d_ci_reg = (sResSquared / n) + (std_a1 ** 2) * Math.pow(x - meanX, 2);
+    const ciRegUpper = yPred + (tCrit * Math.sqrt(d_ci_reg));
+    const ciRegLower = yPred - (tCrit * Math.sqrt(d_ci_reg));
+
+    // Довірчий інтервал на прогнозне значення
+    const d_ci_pred = d_ci_reg + sResSquared;
+    const ciPredUpper = yPred + (tCrit * Math.sqrt(d_ci_pred));
+    const ciPredLower = yPred - (tCrit * Math.sqrt(d_ci_pred));
+
+    return {
+        x,
+        yPred,
+        ciReg: [ciRegLower, ciRegUpper],
+        ciPred: [ciPredLower, ciPredUpper]
+    };
+}
+
+function calculateParamValuesA1(stdDevX, stdDevY, correlation) {
+    console.log("correlation: ", correlation)
+    console.log("stdDevY: ", stdDevY)
+    console.log("stdDevX: ", stdDevX)
+    return correlation * ( stdDevY / stdDevX );
+}
+
+function calculateParamValuesA0( numbersX, numbersY, a1 ) {
+    const meanNumberX = numbersX.reduce((sum, val) => sum + val, 0) / numbersX.length;
+    const meanNumberY = numbersY.reduce((sum, val) => sum + val, 0) / numbersY.length;
+
+    return meanNumberY - ( a1 * meanNumberX );
+}
+
+function calculateStdA0AndA1(numbersX, numbersY, a0, a1, stdDevX) {
+    const n = numbersX.length;
+    const s = 2;
+    const meanNumberX = numbersX.reduce((sum, val) => sum + val, 0) / n;
+    const meanNumberY = numbersY.reduce((sum, val) => sum + val, 0) / n;
+
+    const sResSquared = numbersX.reduce((sum, x, i) => {
+        const y = numbersY[i];
+        const predictedY = a0 + a1 * x;
+        return sum + Math.pow(y - predictedY, 2);
+    }, 0) / (n - 2);
+
+    const sXSquared = Math.pow(stdDevX, 2);
+
+    const D_a1 = sResSquared / (n * sXSquared);
+    const D_a0 = sResSquared * ((1 / n) + (Math.pow(meanNumberX, 2) / (n * sXSquared)));
+
+    const std_a0 = Math.sqrt(D_a0);
+    const std_a1 = Math.sqrt(D_a1);
+
+    const t_critical = jStat.studentt.inv(1 - a / 2, n - 2);
+
+    const a0_lower = a0 - t_critical * std_a0;
+    const a0_upper = a0 + t_critical * std_a0;
+    const a1_lower = a1 - t_critical * std_a1;
+    const a1_upper = a1 + t_critical * std_a1;
+
+    const t_a0 = a0 / std_a0;
+    const t_a1 = a1 / std_a1;
+
+    const t_a0_not_equal_0 = Math.abs(t_a0) > t_critical;
+    const t_a1_not_equal_0 = Math.abs(t_a1) > t_critical;
+    let conclusionA0;
+    let conclusionA1;
+    if(t_a0_not_equal_0) {
+        conclusionA0 = 'significant';
+    }
+    else {
+        conclusionA0 = 'not significant';
+    }
+    if(t_a1_not_equal_0) {
+        conclusionA1 = 'significant';
+    }
+    else {
+        conclusionA1 = 'not significant';
+    }
+
+    const regressionLine = [];
+    const ciRegLower = [];
+    const ciRegUpper = [];
+    const ciPredLower = [];
+    const ciPredUpper = [];
+
+    for (let i = 0; i < numbersX.length; i++) {
+        const x = numbersX[i];
+        const yPred = a0 + a1 * x;
+        regressionLine.push(yPred);
+
+        const d_ci_reg = (sResSquared / n) + (D_a1 * Math.pow(x - meanNumberX, 2));
+        const margin_reg = t_critical * Math.sqrt(d_ci_reg);
+        ciRegUpper.push(yPred + margin_reg);
+        ciRegLower.push(yPred - margin_reg);
+
+        const d_ci_pred = d_ci_reg + sResSquared;
+        const margin_pred = t_critical * Math.sqrt(d_ci_pred);
+        ciPredUpper.push(yPred + margin_pred);
+        ciPredLower.push(yPred - margin_pred);
+    }
+
+    // R^2 (коэффициент детерминации)
+    const stdDevYBiased = Math.sqrt(numbersY.reduce((sum, y) => sum + Math.pow(y - meanNumberY, 2), 0) / n);
+    const r_squared = 1 - (((n - s) * sResSquared) / ((n - 1) * Math.pow(stdDevYBiased, 2)));
+
+    // F-test
+    const y_pred = numbersX.map(x => a0 + a1 * x);
+    const sse_res = numbersY.reduce((sum, y, i) => sum + Math.pow(y - y_pred[i], 2), 0);
+    const ssr = y_pred.reduce((sum, y_hat) => sum + Math.pow(y_hat - meanNumberY, 2), 0);
+    const fStat = (ssr / 1) / (sse_res / (n - 2));
+    const f_critical = jStat.centralF.inv(1 - a, s - 1, n - s);
+    const isSignificant = fStat > f_critical;
+    let conclusionF;
+    if(isSignificant) {
+        conclusionF = 'significant';
+    }
+    else{
+        conclusionF = 'not significant';
+    }
+
+    return {r_squared, fStat, f_critical, conclusionF, a0, a1, sResSquared, std_a0, std_a1, a0_lower, a1_lower, a0_upper, a1_upper, t_critical, t_a0, t_a1, conclusionA0, conclusionA1, regressionLine, ciRegLower, ciRegUpper, ciPredLower, ciPredUpper};
+}
+
+//// lab 2
+
+function calculateClassValues(numbersX, numbersY, numClasses, bandwidth) {
+    const xMin = Math.min(...numbersX);
+    const N = numbersX.length;
+
+    let classBoundaries = [];
+    for (let l = 1; l <= numClasses + 1; l++) {
+        classBoundaries.push(xMin + (l - 1) * bandwidth);
+    }
+
+    let classCenters = [];
+    for (let l = 0; l < numClasses; l++) {
+        classCenters.push(0.5 * (classBoundaries[l] + classBoundaries[l + 1]));
+    }
+
+    console.log("classBoundaries:", classBoundaries);
+    console.log("classCenters:", classCenters);
+
+    let classValues = Array.from({ length: numClasses }, () => []);
+
+    numbersX.forEach((xi, index) => {
+        let yi = numbersY[index];
+        for (let l = 0; l < numClasses; l++) {
+            if(l === numClasses - 1){
+                if(xi >= classBoundaries[l] && xi <= classBoundaries[l + 1]){
+                    classValues[l].push(yi);
+                    break;
+                }
+            }
+            else{
+                if (xi >= classBoundaries[l] && xi < classBoundaries[l + 1]) {
+                    classValues[l].push(yi);
+                    break;
+                }
+            }
+        }
     });
-    return {x, y};
+
+    console.log("classValues:", classValues);
+
+    return {classValues, classCenters};
 }
 
-//    const kde = data.reduce((a, b) => a + Math.exp((-Math.pow(((x-b)/bandwidth), 2)/2))/(Math.sqrt(2 * Math.PI)), 0) / (n * bandwidth)
-function calculateECDF(frequenciesArray) {
-    const x = frequenciesArray.map((el) => el.value);
-    const y = frequenciesArray.map((el) => el.empiricalDistributions);
-    return {x, y};
+function calculateClassValuesFor(numbersX, numbersY, numClasses, bandwidth) {
+    const xMin = Math.min(...numbersX);
+    const N = numbersX.length;
+
+    let classBoundaries = [];
+    for (let l = 1; l <= numClasses + 1; l++) {
+        classBoundaries.push(xMin + (l - 1) * bandwidth);
+    }
+
+    let classCenters = [];
+    for (let l = 0; l < numClasses; l++) {
+        classCenters.push(0.5 * (classBoundaries[l] + classBoundaries[l + 1]));
+    }
+
+    console.log("classBoundaries:", classBoundaries);
+    console.log("classCenters:", classCenters);
+
+    let classValues = Array.from({ length: numClasses }, () => []);
+
+    numbersX.forEach((xi, index) => {
+        let yi = numbersY[index];
+        for (let l = 0; l < numClasses; l++) {
+            if (l === numClasses - 1) {
+                if (xi >= classBoundaries[l] && xi <= classBoundaries[l + 1]) {
+                    classValues[l].push(yi);
+                    break;
+                }
+            } else {
+                if (xi >= classBoundaries[l] && xi < classBoundaries[l + 1]) {
+                    classValues[l].push(yi);
+                    break;
+                }
+            }
+        }
+    });
+
+    console.log("classValues:", classValues);
+
+    let classCentersExpanded = classValues.flatMap((values, i) => Array(values.length).fill(classCenters[i]));
+
+    console.log("classCentersExpanded:", classCentersExpanded);
+
+    return { classValues, classCenters: classCentersExpanded };
 }
 
-function calculateDistribution(data, lambda) {
-    const x = data.map((el) => el.value);
-    const y = data.map((el) => 1 - Math.exp(el.value * lambda * -1));
-    return {x, y};
+
+function calculateCorrelationRatio(numbersX, numbersY, numClasses, bandwidth) {
+    const {classValues, classCenters} = calculateClassValues(numbersX, numbersY, numClasses, bandwidth);
+    const N = numbersX.length;
+    console.log("classValues: ", classValues)
+
+    const meanYs = [];
+    for (let l = 0; l < numClasses; l++) {
+        meanYs.push(classValues[l].reduce((a, b) => a + b, 0) / classValues[l].length);
+    }
+
+    console.log("meanYs:", meanYs);
+
+    const meanY = meanYs.reduce((sum, y, index) => sum + (y * classValues[index].length), 0) / N;
+
+    console.log("meanY:", meanY);
+
+    const corRatio = Math.sqrt((meanYs.reduce((sum, y, index) => sum + ( classValues[index].length * Math.pow((y - meanY), 2)), 0)) / (meanYs.reduce((sum, y, index) => sum + (classValues[index].reduce((sumi, yi) => sumi + ( Math.pow((yi - meanY), 2) ), 0)), 0)))
+    const corRatioPow = Math.pow(corRatio, 2);
+
+    const stat = ( corRatioPow / (numClasses - 1)) / (Math.sqrt(1 - Math.pow(corRatio, 2)) / (N - numClasses));
+
+    const student = jStat.centralF.inv(1 - a, numClasses - 1, N - numClasses);
+
+    let conclusionIm;
+    let conclusionCon;
+    if(stat > student) {
+        conclusionIm = 'significant';
+        conclusionCon = 'exist'
+    }
+    else{
+        conclusionIm = 'not significant';
+        conclusionCon = 'not exist'
+    }
+
+    return{corRatio, stat, student, conclusionIm, conclusionCon};
 }
+
+function calculatePearsonCorrelationRatio(numbersX, numbersY, numClasses, bandwidth, corRatio) {
+    const N = numbersX.length;
+    const {classValues, classCenters} = calculateClassValuesFor(numbersX, numbersY, numClasses, bandwidth);
+
+    const meanX = classCenters.reduce((a, b) => a + b, 0) / N;
+    const meanY = classValues.flat().reduce((a, b) => a + b, 0) / N;
+    const meanXY = classValues.flat().reduce((acc, y, i) => {
+        return acc + (y * classCenters[i])}, 0) / N;
+    console.log("meanX:", meanX);
+    console.log("meanY:", meanY);
+    console.log("meanXY:", meanXY);
+
+    //mean square deviation (shifted)
+    const stdDevX = Math.sqrt(classCenters.reduce((sum, x) => sum + Math.pow((x - meanX), 2), 0) / N);
+    const stdDevY = Math.sqrt(classValues.flat().reduce((sum, y) => sum + Math.pow((y - meanY), 2), 0) / N);
+    console.log("stdDevX:", stdDevX);
+    console.log("stdDevY:", stdDevY);
+
+    const corPearson = (meanXY - (meanX * meanY)) / (stdDevX * stdDevY);
+    console.log("corPearson:", corPearson);
+
+    const stat = ((Math.pow(corRatio, 2) - Math.pow(corPearson, 2)) / (numClasses - 2)) / ((1 - Math.pow(corPearson, 2)) / (N - numClasses));
+
+    const student = jStat.centralF.inv(1 - a, numClasses - 2, N - numClasses);
+
+    let conclusionEq;
+    let conclusionLinear;
+    if(stat > student) {
+        conclusionEq = 'not equal';
+        conclusionLinear = 'non-linear';
+    }
+    else{
+        conclusionEq = 'equal';
+        conclusionLinear = 'linear'
+    }
+
+    return{corRatio, corPearson, stat, student, conclusionEq, conclusionLinear};
+
+}
+
+function calculateRank(sample) {
+    const sorted = sample.map((value, index) => ({ value, index }))
+        .sort((a, b) => a.value - b.value);
+
+    let rank = 1;
+    let ranks = new Array(sample.length).fill(0);
+
+    for (let i = 0; i < sorted.length; i++) {
+        let tieSum = rank;
+        let tieCount = 1;
+
+        while (i + 1 < sorted.length && sorted[i].value === sorted[i + 1].value) {
+            tieSum += (rank + 1);
+            tieCount++;
+            rank++;
+            i++;
+        }
+
+        const averageRank = tieSum / tieCount;
+        for (let j = 0; j < tieCount; j++) {
+            ranks[sorted[i - j].index] = averageRank;
+        }
+        rank++;
+    }
+    console.log("ranks: ", ranks);
+    return ranks;
+}
+
+function calculateRankSpearman(rankX, rankY) {
+    const N = rankX.length;
+    const pearsonCorrelation = calculatePearsonCorrelationCoefficient(rankX, rankY);
+    const spearman = pearsonCorrelation.correlation;
+
+    const stat = (spearman * Math.sqrt(N - 2)) / Math.sqrt(1 - Math.pow(spearman, 2));
+    const student = pearsonCorrelation.student;
+    let conclusionIm;
+    let conclusionCon;
+    if(Math.abs(stat) > student) {
+        conclusionIm = 'significant';
+        conclusionCon = 'exist'
+    }
+    else{
+        conclusionIm = 'not significant';
+        conclusionCon = 'not exist'
+    }
+
+    return {spearman, stat, student, conclusionIm, conclusionCon};
+
+}
+
+function calculateRankKendall(rankX, rankY) {
+    const n = rankX.length;
+    let S = 0, C = 0, D = 0;
+
+    for (let i = 0; i < n - 1; i++) {
+        for (let j = i + 1; j < n; j++) {
+            const signX = Math.sign(rankX[i] - rankX[j]);
+            const signY = Math.sign(rankY[i] - rankY[j]);
+
+            if (signX * signY > 0) {
+                S += 1;
+            } else if (signX * signY < 0) {
+                S -= 1;
+            }
+
+            if (signX === 0) C++;
+            if (signY === 0) D++;
+        }
+    }
+
+    const denominator = Math.sqrt(((0.5 * n * (n - 1) - C) * (0.5 * n * (n - 1) - D)));
+    const correlation = denominator !== 0 ? S / denominator : 0;
+    console.log("denominator: ", denominator);
+    console.log("S: ", S)
+
+    const stat = (correlation * Math.sqrt(9 * n * (n - 1))) / Math.sqrt(2 * (2 * n + 5));
+    const student = jStat.normal.inv(1 - a / 2, 0, 1);
+    let conclusionIm;
+    let conclusionCon;
+    if(Math.abs(stat) > student) {
+        conclusionIm = 'significant';
+        conclusionCon = 'exist'
+    }
+    else{
+        conclusionIm = 'not significant';
+        conclusionCon = 'not exist'
+    }
+
+    return {
+        correlation,
+        stat,
+        student,
+        conclusionIm,
+        conclusionCon
+    };
+}
+
 
 function calculateNumClasses(data) {
     const n = data.length;
     return Math.round(1 + 1.44 * Math.log(n));
 }
 
-function calculateBandwidth(data) {
-    const n = data.length;
-    const mean = data.reduce((a, b) => a + b, 0) / n;
-    const stdDev = Math.sqrt(data.reduce((sum, x) => sum + Math.pow(x - mean, 2), 0) / n);
-    return stdDev * Math.pow(n, -0.2);
+function calculateBandwidth(data, numClasses) {
+    return (Math.max(...data) - Math.min(...data)) / numClasses;
 }
 
 function calcMedian(data, n) {
@@ -224,7 +590,6 @@ function estimateStatistics(data) {
     const variance1 = calcVariance1(data, mean, n);
     const stdDev0 = Math.sqrt(variance0);
     const stdDev1 = Math.sqrt(variance1);
-    //console.log('stdDev0: ' + stdDev0)
     const skewness = calcSkewness(data, mean, n, stdDev0);
     const kurtosis = calcKurtosis(data, mean, n, stdDev0);
 
@@ -233,9 +598,8 @@ function estimateStatistics(data) {
     const semSkewness = Math.sqrt((6 * n * (n - 1)) / ((n - 2) * (n + 1) * (n + 3)));
     const semKurtosis = Math.sqrt((24 * n * Math.pow((n - 1), 2)) / ((n - 2) * (n - 3) * (n + 3) * (n + 5)));
 
-    const alfa = 1 - confidenceLevel;
+    const alfa = a;
     const zValue = jStat.normal.inv(1 - alfa / 2, 0, 1); //квантиль стандартного нормального розподілу (1.96)
-    //console.log(zValue)
     const meanCI = {x: (mean - (zValue * semMean)), y: (mean + (zValue * semMean))};
     const medianCI = {
         x: sortedData[(Math.ceil((n / 2) - (zValue * (Math.sqrt(n) / 2))) - 1)],
@@ -266,27 +630,8 @@ function estimateStatistics(data) {
     }
 }
 
-function findBounds(data) {
-    const sortedData = [...data].sort((a, b) => a - b);
-    const k = 1.5;
-
-    const q1 = ss.quantile(sortedData, 0.25);
-    const q3 = ss.quantile(sortedData, 0.75);
-
-    const iqr = q3 - q1;
-
-    const lowerBound = q1 - k * iqr;
-    const upperBound = q3 + k * iqr;
-
-    return {lowerBound, upperBound};
-}
-
-function findAnomalies(data, lowerBound, upperBound) {
-    return [...data].filter(x => x < lowerBound || x > upperBound);
-}
-
 function identifyingNormDistributionSkewnessKurtosis(semSkewness, semKurtosis, skewness, kurtosis) {
-    const alfa = 1 - confidenceLevel;
+    const alfa = 1 - a;
     const zValue = jStat.normal.inv(1 - alfa / 2, 0, 1);
 
     const u_a = skewness / semSkewness;
@@ -318,7 +663,6 @@ function identifyingNormDistributionProbPlot(data, mean, stdDev, empiricalDistri
     const lineY = [mean + minTheoreticalQuantile * stdDev, mean + maxTheoreticalQuantile * stdDev];
 
     const linearizedDistributionLineX = [minTheoreticalQuantile, maxTheoreticalQuantile];
-    console.log(lambda, minTheoreticalQuantile, maxTheoreticalQuantile);
     const zt = theoreticalQuantiles.reduce((sum, x) => sum + ((Math.log(Math.exp(lambda * x)) / Math.log(10)) * x));
     const t2 = theoreticalQuantiles.reduce((sum, x) => sum + (Math.pow(x, 2)), 0);
     const a = zt / t2;
@@ -331,35 +675,6 @@ function identifyingNormDistributionProbPlot(data, mean, stdDev, empiricalDistri
         lineY: lineY,
         linearizedDistributionLineX: linearizedDistributionLineX,
         linearizedDistributionLineY: linearizedDistributionLineY
-    };
-}
-
-function identifyingExrProbPlot(data, empiricalDistributions) {
-    const sortedData = [...new Set([...data])].sort((a, b) => a - b);
-
-    let theoreticalQuantiles = empiricalDistributions.map(p => -Math.log(1 - p));
-    theoreticalQuantiles.pop()
-    console.log('theoreticalQuantiles: ', theoreticalQuantiles)
-
-    const minTheoreticalQuantile = Math.min(...theoreticalQuantiles);
-    console.log('minTheoreticalQuantile', minTheoreticalQuantile)
-    const maxTheoreticalQuantile = Math.max(...theoreticalQuantiles);
-    console.log('maxTheoreticalQuantile', maxTheoreticalQuantile)
-    const lineX = [minTheoreticalQuantile, maxTheoreticalQuantile];
-    console.log('lineX: ', lineX)
-
-    const lambda = sortedData.length / sortedData.reduce((sum, x) => sum + x, 0);
-
-    const linearizedDistributionLineY = lineX.map(x => x / lambda);
-    console.log('linearizedDistributionLineY: ', linearizedDistributionLineY)
-    console.log('[lineX[0], linearizedDistributionLineY[0]]: ', [lineX[0], linearizedDistributionLineY[0]])
-    console.log('[lineX[1], linearizedDistributionLineY[1]]: ', [lineX[1], linearizedDistributionLineY[1]])
-
-    return {
-        x: theoreticalQuantiles,
-        y: sortedData,
-        lineX: [lineX[0], lineX[1]],
-        lineY: [linearizedDistributionLineY[0], linearizedDistributionLineY[1]],
     };
 }
 
@@ -386,9 +701,7 @@ function pearsonChiSquareTest(observedFrequencies, expectedFrequencies, alpha = 
     }, 0);
 
     const criticalValue = jStat.chisquare.inv(1 - alpha, degreesOfFreedom);
-    console.log(criticalValue)
     const pValue = 1 - jStat.chisquare.cdf(chiSquareStatistic, degreesOfFreedom);
-    console.log(pValue)
 
     const isDistributionValid = chiSquareStatistic <= criticalValue;
 
